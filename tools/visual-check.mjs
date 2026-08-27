@@ -67,6 +67,16 @@ async function main() {
   await page.waitForTimeout(300);
   await setSlider(page, "Viewport samples", 24);
 
+  // Captured here, not at the end: switching tabs unmounts these controls, and
+  // querying for them afterwards reports null rather than what was in effect.
+  const settings = await page.evaluate(() => {
+    const read = (label) => {
+      const el = document.querySelector(`input[aria-label="${label}"]`);
+      return el ? Number(el.value) : null;
+    };
+    return { exposure: read("Exposure"), samples: read("Viewport samples"), hour: read("Hour of day") };
+  });
+
   for (const [i, camera] of CAMERAS.entries()) {
     await page.getByRole("button", { name: camera, exact: true }).click();
     await page.waitForTimeout(7000);
@@ -113,16 +123,6 @@ async function main() {
       };
     });
   }
-
-  // Read back the settings actually in effect, so a run that silently drove a
-  // control to its limit is visible in the report rather than only in the image.
-  const settings = await page.evaluate(() => {
-    const read = (label) => {
-      const el = document.querySelector(`input[aria-label="${label}"]`);
-      return el ? Number(el.value) : null;
-    };
-    return { exposure: read("Exposure"), samples: read("Viewport samples"), hour: read("Hour of day") };
-  }).catch(() => null);
 
   const report = {
     passes: labels,
