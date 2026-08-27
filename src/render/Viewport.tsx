@@ -12,6 +12,7 @@ import * as THREE from "three";
 import type { Scheme } from "@/domain/project";
 import { buildSchemeScene, type SceneBuild } from "./scene";
 import { ProgressiveRenderer } from "./progressive";
+import { PassRenderer, type PassKind } from "./passes";
 import { SkyEnvironment } from "./sky";
 import { solarPosition, sunLighting, sunVector, type SunInput } from "./sun";
 import type { RenderMode } from "./materials";
@@ -61,6 +62,11 @@ export interface ViewportHandle {
     onProgress?: (fraction: number) => void,
   ) => Promise<string>;
   sampleCount: () => number;
+  /**
+   * Render the conditioning passes an AI photoreal step needs, from the
+   * current camera. Returns a PNG data URL per requested pass.
+   */
+  renderPasses: (kinds: PassKind[], width: number, height: number, samples?: number) => Promise<Record<string, string>>;
 }
 
 interface Props {
@@ -77,6 +83,7 @@ interface ViewportState {
   scene: THREE.Scene;
   camera: THREE.PerspectiveCamera;
   progressive: ProgressiveRenderer;
+  passes: PassRenderer;
   sky: SkyEnvironment;
   sun: THREE.DirectionalLight;
   fill: THREE.HemisphereLight;
@@ -160,9 +167,10 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
     scene.add(sky.dome);
     const progressive = new ProgressiveRenderer(renderer, { maxSamples: settings.maxSamples });
     progressive.setSun(sun);
+    const passes = new PassRenderer(renderer);
 
     stateRef.current = {
-      renderer, scene, camera, progressive, sky, sun, fill,
+      renderer, scene, camera, progressive, passes, sky, sun, fill,
       orbit: { azimuth: 225, elevation: 22, distance: 600, target: new THREE.Vector3() },
       build: null,
       interacting: false,
@@ -218,6 +226,7 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
       if (s) {
         s.build?.dispose();
         s.progressive.dispose();
+        s.passes.dispose();
         s.sky.dispose();
         s.renderer.dispose();
       }
@@ -431,6 +440,33 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
         return s.progressive.renderStill(s.scene, s.camera, width, height, samples, onStillProgress);
       },
       sampleCount: () => stateRef.current?.progressive.sampleCount ?? 0,
+      renderPasses: async (kinds, width, height, samples = 160) => {
+        const s = stateRef.current;
+        if (!s) throw new Error("Viewport is not ready");
+        const out: Record<string, string> = {};
+        for (const kind of kinds) {
+          out[kind] =
+            kind === "beauty"
+              ? await s.progressive.renderStill(s.scene, s.camera, width, height, samples)
+              : s.passes.render(kind, {
+                  renderer: s.renderer,
+                  scene: s.scene,
+                  camera: s.camera,
+                  width,
+                  height,
+                });
+        }
+        // Every pass resized the canvas; put the viewport back the way it was.
+        const mount = mountRef.current;
+        if (mount) {
+          s.renderer.setSize(mount.clientWidth || 1, mount.clientHeight || 1, false);
+          s.camera.aspect = (mount.clientWidth || 1) / (mount.clientHeight || 1);
+          s.camera.updateProjectionMatrix();
+          s.progressive.setSize(mount.clientWidth || 1, mount.clientHeight || 1, s.renderer.getPixelRatio());
+        }
+        s.progressive.reset();
+        return out;
+      },
     }),
     [applyPreset],
   );

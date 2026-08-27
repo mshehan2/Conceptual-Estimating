@@ -13,6 +13,8 @@ import { EstimatePanel } from "./panels/EstimatePanel";
 import { ComparePanel } from "./panels/ComparePanel";
 import { CostDataPanel } from "./panels/CostDataPanel";
 import { RenderPanel } from "./panels/RenderPanel";
+import { PhotorealPanel } from "./panels/PhotorealPanel";
+import { SheetPanel } from "./panels/SheetPanel";
 import { Viewport, type ViewportHandle, type ViewportSettings } from "@/render/Viewport";
 import { useActiveEstimate, useActiveScheme, useProject } from "./store/useProject";
 import { Kpi, Modal } from "@/ui/primitives";
@@ -21,7 +23,7 @@ import { TYPE_BY_ID } from "@/markets/registry";
 import { LOCATION_FACTORS } from "@/costs/seed/locations";
 import type { Project } from "@/domain/project";
 
-type Tab = "program" | "estimate" | "compare" | "data" | "render";
+type Tab = "program" | "estimate" | "compare" | "data" | "render" | "photoreal" | "sheets";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "program", label: "Program" },
@@ -29,6 +31,8 @@ const TABS: { id: Tab; label: string }[] = [
   { id: "compare", label: "Compare" },
   { id: "data", label: "Cost data" },
   { id: "render", label: "Render" },
+  { id: "photoreal", label: "Photoreal" },
+  { id: "sheets", label: "Sheets" },
 ];
 
 const DEFAULT_VIEW: ViewportSettings = {
@@ -50,6 +54,7 @@ export function App() {
   const [view, setView] = useState<ViewportSettings>(DEFAULT_VIEW);
   const [selectedMassId, setSelectedMassId] = useState<string | null>(null);
   const [progress, setProgress] = useState(0);
+  const [photorealImage, setPhotorealImage] = useState<string | null>(null);
   const [theme, setTheme] = useState<"light" | "dark">(() =>
     typeof matchMedia !== "undefined" && matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light",
   );
@@ -204,6 +209,8 @@ export function App() {
             {tab === "render" && (
               <RenderPanel settings={view} onChange={patchView} viewport={viewportRef} />
             )}
+            {tab === "photoreal" && <PhotorealPanel viewport={viewportRef} onResult={setPhotorealImage} />}
+            {tab === "sheets" && <SheetPanel viewport={viewportRef} photorealImage={photorealImage} />}
           </div>
         </aside>
       </div>

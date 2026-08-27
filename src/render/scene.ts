@@ -12,6 +12,7 @@ import type { Scheme } from "@/domain/project";
 import { wallHeight, type Mass } from "@/domain/massing";
 import { TYPE_BY_ID, MARKET_BY_ID } from "@/markets/registry";
 import { buildEntourage, type EntourageResult } from "./entourage";
+import type { MaskCategory } from "./passes";
 import {
   contextMaterial,
   glassMaterial,
@@ -49,6 +50,11 @@ export interface SceneOptions {
   selectedMassId?: string | null;
 }
 
+/** Label a mesh for the semantic mask pass. */
+const tag = (mesh: THREE.Object3D, category: MaskCategory) => {
+  mesh.userData.maskCategory = category;
+};
+
 /** Colour a mass takes in program mode: its market's accent. */
 function programTint(mass: Mass): number {
   const type = TYPE_BY_ID[mass.typeId];
@@ -75,6 +81,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
     wallMesh.rotation.y = build.rotationY;
     wallMesh.castShadow = true;
     wallMesh.receiveShadow = true;
+    tag(wallMesh, mass.context ? "context" : "wall");
     group.add(wallMesh);
 
     if (!mass.context) {
@@ -85,6 +92,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
         glassMesh.position.copy(build.position);
         glassMesh.rotation.y = build.rotationY;
         glassMesh.receiveShadow = false;
+        tag(glassMesh, "glass");
         group.add(glassMesh);
       }
 
@@ -95,6 +103,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
         mullionMesh.position.copy(build.position);
         mullionMesh.rotation.y = build.rotationY;
         mullionMesh.castShadow = true;
+        tag(mullionMesh, "mullion");
         group.add(mullionMesh);
       }
     }
@@ -108,6 +117,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
     const bandMesh = new THREE.Mesh(geometry, mass.context ? contextMaterial() : trimMaterial(mode, tint));
     bandMesh.castShadow = true;
     bandMesh.receiveShadow = true;
+    tag(bandMesh, mass.context ? "context" : "trim");
     group.add(bandMesh);
   }
 
@@ -119,6 +129,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
   );
   roofMesh.castShadow = true;
   roofMesh.receiveShadow = true;
+  tag(roofMesh, mass.context ? "context" : "roof");
   group.add(roofMesh);
 
   if (parapet) {
@@ -129,6 +140,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
     );
     parapetMesh.castShadow = true;
     parapetMesh.receiveShadow = true;
+    tag(parapetMesh, mass.context ? "context" : "wall");
     group.add(parapetMesh);
   }
 
@@ -141,6 +153,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
     );
     gableMesh.castShadow = true;
     gableMesh.receiveShadow = true;
+    tag(gableMesh, mass.context ? "context" : "wall");
     group.add(gableMesh);
   }
 
@@ -185,6 +198,7 @@ export function buildSchemeScene(scheme: Scheme, options: SceneOptions): SceneBu
     ground.rotation.x = -Math.PI / 2;
     ground.position.y = -0.12;
     ground.receiveShadow = true;
+    tag(ground, "ground");
     group.add(ground);
     disposables.push(ground.geometry);
   }
@@ -199,6 +213,7 @@ export function buildSchemeScene(scheme: Scheme, options: SceneOptions): SceneBu
     paving.rotation.x = -Math.PI / 2;
     paving.position.set(centre.x, -0.06, bounds.max.z + depth / 2 + 40);
     paving.receiveShadow = true;
+    tag(paving, "paving");
     group.add(paving);
     disposables.push(paving.geometry);
     void size;

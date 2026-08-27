@@ -163,6 +163,8 @@ export function buildEntourage(input: EntourageInput, mode: RenderMode): Entoura
     });
     trunks.castShadow = canopies.castShadow = true;
     canopies.receiveShadow = true;
+    trunks.userData.maskCategory = "vegetation";
+    canopies.userData.maskCategory = "vegetation";
     group.add(trunks, canopies);
   }
 
@@ -184,6 +186,7 @@ export function buildEntourage(input: EntourageInput, mode: RenderMode): Entoura
       cars.setMatrixAt(i, m);
     });
     cars.castShadow = true;
+    cars.userData.maskCategory = "vehicle";
     group.add(cars);
   }
 
@@ -204,6 +207,7 @@ export function buildEntourage(input: EntourageInput, mode: RenderMode): Entoura
       people.setMatrixAt(i, m);
     });
     people.castShadow = true;
+    people.userData.maskCategory = "figure";
     group.add(people);
   }
 

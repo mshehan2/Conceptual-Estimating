@@ -1,0 +1,205 @@
+/* ---------------------------------------------------------------------------
+   Presentation sheets.
+
+   Laid out at a fixed 11x17 landscape ratio and scaled to fit the screen, so
+   what is on screen is exactly what prints. Colours are pinned rather than
+   token-driven: a sheet goes to a client on paper, and it should not change
+   because the person who made it had dark mode on.
+   --------------------------------------------------------------------------- */
+
+.sheet-stage {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  background: rgba(12, 20, 28, 0.72);
+  display: flex;
+  flex-direction: column;
+  overflow: auto;
+}
+
+.sheet-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line-strong);
+}
+
+.sheet-scroll {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+  padding: 20px;
+}
+
+.sheet {
+  /* 17 x 11 inches at 96dpi */
+  width: 1632px;
+  height: 1056px;
+  flex: 0 0 auto;
+  background: #ffffff;
+  color: #10202c;
+  font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.35);
+  transform-origin: top center;
+  overflow: hidden;
+}
+
+.sheet * { box-sizing: border-box; }
+
+.sheet-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 26px 34px 16px;
+  border-bottom: 2px solid #003057;
+}
+
+.sheet-title { font-size: 30px; font-weight: 700; letter-spacing: -0.01em; line-height: 1.1; }
+.sheet-sub { font-size: 13px; color: #5b6770; margin-top: 5px; }
+
+.sheet-brand {
+  text-align: right;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+}
+.sheet-brand strong { font-size: 17px; letter-spacing: 0.22em; color: #003057; display: block; }
+.sheet-brand span { font-size: 9.5px; letter-spacing: 0.14em; text-transform: uppercase; color: #7e8c95; }
+
+.sheet-body {
+  display: grid;
+  grid-template-columns: 1.62fr 1fr;
+  gap: 20px;
+  padding: 20px 34px;
+  min-height: 0;
+}
+
+.sheet-col { display: flex; flex-direction: column; gap: 14px; min-height: 0; }
+
+.sheet-hero {
+  flex: 1;
+  min-height: 0;
+  border: 1px solid #dfe4e8;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #eef1f4;
+  display: flex;
+}
+.sheet-hero img { width: 100%; height: 100%; object-fit: cover; display: block; }
+
+.sheet-thumbs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; height: 190px; }
+.sheet-thumb {
+  border: 1px solid #dfe4e8;
+  border-radius: 4px;
+  overflow: hidden;
+  background: #eef1f4;
+  position: relative;
+}
+.sheet-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sheet-thumb figcaption {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  padding: 3px 7px;
+  background: rgba(255, 255, 255, 0.9);
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #47575f;
+}
+
+.sheet-block { border: 1px solid #dfe4e8; border-radius: 4px; padding: 13px 15px; }
+.sheet-block h3 {
+  margin: 0 0 9px;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: #7e8c95;
+  font-weight: 600;
+}
+
+.sheet-kpis { display: grid; grid-template-columns: repeat(2, 1fr); gap: 11px 18px; }
+.sheet-kpi span {
+  display: block;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: #7e8c95;
+}
+.sheet-kpi strong {
+  display: block;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  font-size: 21px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+}
+
+.sheet-table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+.sheet-table td { padding: 3.5px 0; border-bottom: 1px solid #eef1f4; }
+.sheet-table td.n {
+  text-align: right;
+  font-family: "IBM Plex Mono", ui-monospace, monospace;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+.sheet-table tr.total td { border-top: 1.5px solid #003057; border-bottom: 0; font-weight: 700; padding-top: 6px; }
+
+.sheet-bar { height: 5px; background: #eef1f4; border-radius: 3px; overflow: hidden; margin-top: 3px; }
+.sheet-bar span { display: block; height: 100%; background: #003057; }
+
+.sheet-band { position: relative; height: 30px; background: #f2f4f6; border-radius: 4px; margin: 8px 0 5px; }
+.sheet-band .rng { position: absolute; top: 0; bottom: 0; background: rgba(44, 107, 160, 0.2); border-left: 1px solid #2c6ba0; border-right: 1px solid #2c6ba0; }
+.sheet-band .mid { position: absolute; top: 0; bottom: 0; width: 2px; background: #2c6ba0; }
+.sheet-band .act { position: absolute; top: -3px; bottom: -3px; width: 3px; background: #fa4616; }
+
+.sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 12px 34px 18px;
+  border-top: 1px solid #dfe4e8;
+  font-size: 10.5px;
+  color: #7e8c95;
+  line-height: 1.5;
+}
+
+.sheet-legend { display: flex; gap: 14px; flex-wrap: wrap; }
+.sheet-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.sheet-legend i { width: 9px; height: 9px; border-radius: 2px; display: block; }
+
+/* --- Comparison sheet ------------------------------------------------------ */
+.sheet-compare { display: grid; gap: 14px; padding: 20px 34px; align-content: start; }
+.sheet-compare-grid { display: grid; gap: 14px; }
+.sheet-option { border: 1px solid #dfe4e8; border-radius: 4px; overflow: hidden; display: flex; flex-direction: column; }
+.sheet-option .shot { height: 250px; background: #eef1f4; }
+.sheet-option .shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.sheet-option .meta { padding: 11px 13px; display: flex; flex-direction: column; gap: 7px; }
+.sheet-option h4 { margin: 0; font-size: 15px; font-weight: 700; }
+.sheet-option .type { font-size: 10.5px; color: #7e8c95; }
+
+@media print {
+  body { overflow: visible !important; }
+  .app, .sheet-toolbar { display: none !important; }
+  .sheet-stage { position: static; inset: auto; background: #fff; overflow: visible; }
+  .sheet-scroll { padding: 0; gap: 0; }
+  .sheet {
+    box-shadow: none;
+    transform: none !important;
+    page-break-after: always;
+    break-after: page;
+  }
+  @page { size: 17in 11in; margin: 0; }
+}
