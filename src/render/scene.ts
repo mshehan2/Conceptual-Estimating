@@ -11,7 +11,7 @@ import * as THREE from "three";
 import type { Scheme } from "@/domain/project";
 import { wallHeight, type Mass } from "@/domain/massing";
 import { TYPE_BY_ID, MARKET_BY_ID } from "@/markets/registry";
-import { buildEntourage, type EntourageResult } from "./entourage";
+import { buildEntourage, type EntourageResult, type Rect } from "./entourage";
 import type { MaskCategory } from "./passes";
 import {
   contextMaterial,
@@ -230,6 +230,11 @@ export function buildSchemeScene(scheme: Scheme, options: SceneOptions): SceneBu
 
   const bounds = new THREE.Box3();
   const exclusions: { minX: number; maxX: number; minZ: number; maxZ: number }[] = [];
+  // The biggest non-context mass is the one the site is organised around: it
+  // carries the entrance the cars park at and the people walk to.
+  const primary = scheme.masses
+    .filter((m) => !m.context)
+    .reduce<Mass | undefined>((a, m) => (!a || m.w * m.d * m.floors > a.w * a.d * a.floors ? m : a), undefined);
 
   for (const mass of scheme.masses) {
     const built = buildMass(mass, options, disposables);
@@ -265,19 +270,52 @@ export function buildSchemeScene(scheme: Scheme, options: SceneOptions): SceneBu
   }
 
   // --- Site paving, sized from the scheme's parking area ---
+  //
+  // The lot is sized to hold the stalls the estimate is paying for, so it is
+  // proportioned as a lot rather than as an arbitrary rectangle: 60ft bays of
+  // 18ft stalls either side of a 24ft aisle, laid out in whole bays.
+  let lot: Rect | undefined;
   if (scheme.site.parking > 0) {
     const centre = bounds.getCenter(new THREE.Vector3());
-    const size = bounds.getSize(new THREE.Vector3());
-    const depth = Math.max(90, Math.sqrt(scheme.site.parking) * 0.75);
+    // Proportion it like a real field — roughly 1.6:1 — then round the depth
+    // to whole 60ft bays so the stalls the lot draws match the stalls the
+    // estimate is paying for.
+    const bays = Math.max(1, Math.round(Math.sqrt(scheme.site.parking / 1.6) / 60));
+    const depth = bays * 60 + 2 * 8;
     const width = Math.max(120, scheme.site.parking / depth);
+    lot = { cx: centre.x, cz: bounds.max.z + depth / 2 + 40, width, depth, rot: 0 };
     const paving = new THREE.Mesh(new THREE.PlaneGeometry(width, depth), pavingMaterial(options.mode));
     paving.rotation.x = -Math.PI / 2;
-    paving.position.set(centre.x, -0.06, bounds.max.z + depth / 2 + 40);
+    paving.position.set(lot.cx, -0.06, lot.cz);
     paving.receiveShadow = true;
     tag(paving, "paving");
     group.add(paving);
     disposables.push(paving.geometry);
-    void size;
+
+    // A drive and a walk from the lot to the building. Without them the lot is
+    // a slab of asphalt with no way in, which is the first thing anyone who
+    // reads site plans notices.
+    if (primary) {
+      const doorZ = primary.z + primary.d / 2;
+      const run = lot.cz - lot.depth / 2 - doorZ;
+      if (run > 12) {
+        for (const [width, offset, name] of [
+          [26, -18, "drive"],
+          [10, 22, "walk"],
+        ] as const) {
+          const strip = new THREE.Mesh(
+            new THREE.PlaneGeometry(width, run + 16),
+            pavingMaterial(options.mode),
+          );
+          strip.rotation.x = -Math.PI / 2;
+          strip.position.set(primary.x + offset, name === "walk" ? -0.04 : -0.05, doorZ + run / 2);
+          strip.receiveShadow = true;
+          tag(strip, "paving");
+          group.add(strip);
+          disposables.push(strip.geometry);
+        }
+      }
+    }
   }
 
   // --- Entourage ---
@@ -289,10 +327,16 @@ export function buildSchemeScene(scheme: Scheme, options: SceneOptions): SceneBu
       {
         bounds: { minX: bounds.min.x, maxX: bounds.max.x, minZ: bounds.min.z, maxZ: bounds.max.z },
         exclusions,
+        lot,
+        building: primary
+          ? { cx: primary.x, cz: primary.z, width: primary.w, depth: primary.d, rot: (primary.rot * Math.PI) / 180 }
+          : undefined,
         // Scale the population to the site so a small building is not buried
         // in a forest and a large one does not sit in an empty field.
-        trees: Math.round(Math.min(120, 14 + area / 9000)),
-        cars: Math.round(Math.min(70, 6 + scheme.site.parking / 900)),
+        trees: Math.round(Math.min(140, 20 + area / 5200)),
+        // A lot at about three-quarters full. Entourage clamps this to the
+        // stalls that actually exist, so it can never overflow onto the lawn.
+        cars: Math.round(Math.min(90, 4 + (scheme.site.parking / 340) * 0.72)),
         people: Math.round(Math.min(40, 5 + area / 26000)),
         seed: hashString(scheme.id),
       },
