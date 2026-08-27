@@ -13,7 +13,7 @@ import * as THREE from "three";
 import { makeMassForType, type Mass } from "@/domain/massing";
 import { FEATURE_LABELS, makeFeature, type FeatureKind } from "@/domain/features";
 import { featureGeometries } from "../featureGeometry";
-import { massBands, roofGeometry, facadeBuilds, wallGeometry } from "../massGeometry";
+import { massBands, roofGeometry, facadeBuilds, recessOpenings, wallGeometry } from "../massGeometry";
 import type { FootprintShape } from "@/domain/footprint";
 
 const ALL_KINDS = Object.keys(FEATURE_LABELS) as FeatureKind[];
@@ -201,5 +201,131 @@ describe("what is priced is drawn", () => {
       expect(b.floors).toBeGreaterThan(0);
       expect(inspect(wallGeometry(b)).vertices).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("recesses open the wall in front of them", () => {
+  /**
+   * A loggia builds its back wall, soffit and reveals set into the plan. If the
+   * facade in front is left intact the whole thing is buried inside the
+   * building — invisible, while the estimate charges for it AND takes floor
+   * area away for it. This is the priced-but-never-drawn failure exactly.
+   */
+  const openingsFor = (mass: Mass) =>
+    facadeBuilds(mass).flatMap((b) => recessOpenings(mass, b.segment, b.fromFloor, b.fromFloor + b.floors - 1));
+
+  it("punches an opening for a loggia", () => {
+    const mass = massWith("loggia", { glz: "none" });
+    const holes = openingsFor(mass);
+    expect(holes.length).toBeGreaterThan(0);
+    expect(holes[0].width).toBeGreaterThan(0);
+    expect(holes[0].height).toBeGreaterThan(0);
+  });
+
+  it("punches nothing when there is no recess on the wall", () => {
+    expect(openingsFor(massWith("canopy", { glz: "none" }))).toEqual([]);
+    expect(openingsFor(massWith("bay", { glz: "none" }))).toEqual([]);
+  });
+
+  it("opens for a recessed balcony but not a projecting one", () => {
+    const recessed = massWith("balcony", { glz: "none", features: [makeFeature("balcony", { recessed: true } as never)] });
+    const hung = massWith("balcony", { glz: "none", features: [makeFeature("balcony", { recessed: false } as never)] });
+    expect(openingsFor(recessed).length).toBeGreaterThan(0);
+    expect(openingsFor(hung)).toEqual([]);
+  });
+
+  it("punches nothing for a feature switched off", () => {
+    const mass = massWith("loggia", {
+      glz: "none",
+      features: [makeFeature("loggia", { disabled: true })],
+    });
+    expect(openingsFor(mass)).toEqual([]);
+  });
+
+  it("keeps the opening inside the wall it belongs to", () => {
+    for (const along of [0, 0.25, 0.5, 0.75, 1]) {
+      const mass = massWith("loggia", {
+        glz: "none",
+        features: [makeFeature("loggia", { along, width: 40 } as never)],
+      });
+      for (const build of facadeBuilds(mass)) {
+        for (const o of recessOpenings(mass, build.segment, build.fromFloor, build.fromFloor + build.floors - 1)) {
+          expect(o.u).toBeGreaterThanOrEqual(-1e-6);
+          expect(o.u + o.width).toBeLessThanOrEqual(build.length + 1e-6);
+        }
+      }
+    }
+  });
+
+  // A wall is split into runs wherever the cladding changes, so one loggia can
+  // arrive as several openings. What must hold is the total.
+  const openHeight = (mass: Mass) =>
+    openingsFor(mass).reduce((a, o) => a + o.height, 0);
+
+  it("covers the floors the loggia spans and no others", () => {
+    const mass = massWith("loggia", {
+      glz: "none",
+      floors: 6,
+      features: [makeFeature("loggia", { fromFloor: 2, toFloor: 3 } as never)],
+    });
+    expect(openHeight(mass)).toBeCloseTo(2 * mass.fth, 6);
+  });
+
+  it("never opens above the top floor", () => {
+    const mass = massWith("loggia", {
+      glz: "none",
+      floors: 3,
+      features: [makeFeature("loggia", { fromFloor: 0, toFloor: 99 } as never)],
+    });
+    expect(openHeight(mass)).toBeCloseTo(3 * mass.fth, 6);
+    for (const build of facadeBuilds(mass)) {
+      for (const o of recessOpenings(mass, build.segment, build.fromFloor, build.fromFloor + build.floors - 1)) {
+        expect(o.v + o.height).toBeLessThanOrEqual(build.height + 1e-6);
+      }
+    }
+  });
+
+  it("puts the hole where the recess geometry actually is", () => {
+    // The opening is derived from world positions, so it must land on the same
+    // side of the wall as the recess no matter how the polygon is wound.
+    const mass = massWith("loggia", {
+      glz: "none",
+      shape: { kind: "rect" },
+      features: [makeFeature("loggia", { along: 0.2, width: 30 } as never)],
+    });
+    const built = facadeBuilds(mass).filter(
+      (b) => recessOpenings(mass, b.segment, b.fromFloor, b.fromFloor + b.floors - 1).length > 0,
+    );
+    expect(built.length).toBeGreaterThan(0);
+    // Every run carrying the opening must agree on which wall it is.
+    expect(new Set(built.map((b) => b.segment.index)).size).toBe(1);
+    const build = built[0];
+    const [hole] = recessOpenings(mass, build.segment, build.fromFloor, build.fromFloor + build.floors - 1);
+
+    // Where the hole's centre lands in world space.
+    const centre = hole.u + hole.width / 2 - build.length / 2;
+    const nx = build.segment.normal[0];
+    const nz = build.segment.normal[1];
+    const holeX = build.position.x + centre * nz;
+    const holeZ = build.position.z - centre * nx;
+
+    // Where the recess geometry actually is.
+    const geo = featureGeometries(mass).find((g) => g.material === "wall")!.geometry;
+    geo.computeBoundingBox();
+    const box = geo.boundingBox!;
+    expect(holeX).toBeGreaterThan(box.min.x - 3);
+    expect(holeX).toBeLessThan(box.max.x + 3);
+    expect(holeZ).toBeGreaterThan(box.min.z - 3);
+    expect(holeZ).toBeLessThan(box.max.z + 3);
+  });
+
+  it("cuts a real hole in the wall geometry", () => {
+    const solid = massWith("canopy", { glz: "none" });
+    const withLoggia = massWith("loggia", { glz: "none" });
+    const area = (mass: Mass) =>
+      facadeBuilds(mass)
+        .map((b) => wallGeometry(b).attributes.position.count)
+        .reduce((a, n) => a + n, 0);
+    expect(area(withLoggia)).toBeGreaterThan(area(solid));
   });
 });

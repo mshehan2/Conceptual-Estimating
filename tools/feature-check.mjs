@@ -297,6 +297,12 @@ async function drawCheck(page) {
 
   // Features default to the first wall, which the opening camera is behind.
   // Orbit round to it once, then hold the camera still for the whole loop.
+  //
+  // Then CALIBRATE: try a reference feature on each wall in turn and keep the
+  // one the camera can see best. Without this the check silently measures "is
+  // this visible from an arbitrary angle" rather than "does this exist", and
+  // its numbers swing by an order of magnitude whenever anything upstream
+  // changes how the scene is framed.
   const box = await page.locator(".stage").boundingBox();
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
@@ -309,6 +315,8 @@ async function drawCheck(page) {
 
   await settle(page);
   const bare = await signature(page);
+  const facing = await facingWall(page, rows, bare);
+  console.log(`    camera faces wall ${facing.wall} (${facing.px} px)`);
   check("a settled render is stable", changedPixels(bare, await signature(page)) === 0,
     `${changedPixels(bare, await signature(page))} px of noise`);
 
@@ -320,6 +328,8 @@ async function drawCheck(page) {
   const drawn = [];
   for (const kind of kinds) {
     await page.getByLabel("Add a feature").selectOption(kind);
+    await page.waitForTimeout(600);
+    await setWall(page, rows, facing.wall);
     await settle(page);
     const px = changedPixels(bare, await signature(page));
     drawn.push({ kind, px });
@@ -335,6 +345,62 @@ async function drawCheck(page) {
   check("every feature kind draws something", missing.length === 0,
     missing.length ? missing.map((d) => `${d.kind} ${d.px}px`).join(", ") : `${drawn.length} kinds`);
   writeFileSync(join(OUT, "draw.json"), JSON.stringify(drawn, null, 2));
+}
+
+/** Point a feature at a given wall, if it is attached to one at all. */
+async function setWall(page, rows, wall) {
+  const n = await rows().count();
+  if (!n) return;
+  await rows().nth(n - 1).click();
+  await page.waitForTimeout(300);
+  const select = page.locator("label.field", { hasText: "Wall" }).locator("select").first();
+  if (await select.count()) {
+    const values = await select.evaluate((el) => [...el.options].map((o) => o.value));
+    if (values.includes(String(wall))) {
+      await select.selectOption(String(wall));
+      await page.waitForTimeout(400);
+    }
+  }
+  await rows().nth(n - 1).click();
+  await page.waitForTimeout(200);
+}
+
+/**
+ * Which wall this camera actually sees, measured rather than assumed: put one
+ * large reference feature on each in turn and keep the brightest answer.
+ */
+async function facingWall(page, rows, bare) {
+  await page.getByLabel("Add a feature").selectOption("bay");
+  await page.waitForTimeout(700);
+  await rows().first().click();
+  await page.waitForTimeout(300);
+  await page.getByLabel("Width (ft)").last().fill("90");
+  await page.getByLabel("Width (ft)").last().press("Enter");
+  await page.waitForTimeout(400);
+  await page.getByLabel("Projection (ft)").last().fill("14");
+  await page.getByLabel("Projection (ft)").last().press("Enter");
+  await page.waitForTimeout(400);
+
+  const select = page.locator("label.field", { hasText: "Wall" }).locator("select").first();
+  const values = await select.evaluate((el) => [...el.options].map((o) => o.value));
+  let best = { wall: values[0], px: -1 };
+  for (const v of values) {
+    await select.selectOption(v);
+    await settle(page);
+    const px = changedPixels(bare, await signature(page));
+    if (px > best.px) best = { wall: v, px };
+  }
+
+  await rows().first().click();
+  await page.waitForTimeout(250);
+  while ((await rows().count()) > 0) {
+    await rows().first().click();
+    await page.waitForTimeout(300);
+    await page.locator("button", { hasText: /^Delete$/ }).first().click();
+    await page.waitForTimeout(650);
+  }
+  await settle(page);
+  return best;
 }
 
 /**

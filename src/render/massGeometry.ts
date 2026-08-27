@@ -34,18 +34,6 @@ export interface Opening {
   height: number;
 }
 
-export interface FacadeBuild {
-  side: Facade;
-  skin: SkinKey;
-  /** Facade run length, feet. */
-  length: number;
-  height: number;
-  openings: Opening[];
-  /** World-space transform placing this facade on the mass. */
-  position: THREE.Vector3;
-  rotationY: number;
-}
-
 /** Thickness a wall is extruded to, so openings show a reveal. */
 export const WALL_THICKNESS = 0.85;
 
@@ -91,13 +79,60 @@ export function facadeOpenings(
 }
 
 /**
- * A vertical slice of the building between two setbacks.
+ * Openings for the features that cut INTO the plan — a loggia, a recessed
+ * balcony.
  *
- * Without setbacks there is one band covering every floor. With them, each band
- * has its own inset ring, so upper floors are genuinely smaller and the walls,
- * the roof and the terraces all follow from the same geometry the estimate
- * measured.
+ * Without this the recess is modelled correctly and then buried behind an
+ * intact wall, so it is invisible while the estimate charges for it and takes
+ * floor area away for it. That is the priced-but-never-drawn failure, and it
+ * is the one this tool must never commit.
+ *
+ * `u` is derived from world positions rather than from the segment's winding,
+ * so it cannot silently mirror itself when a polygon is wound the other way.
  */
+export function recessOpenings(
+  m: Mass,
+  segment: FacadeSegment,
+  fromFloor: number,
+  toFloor: number,
+): Opening[] {
+  const out: Opening[] = [];
+
+  for (const f of m.features ?? []) {
+    if (f.disabled || f.segment !== segment.index) continue;
+    const recessed =
+      f.kind === "loggia" || (f.kind === "balcony" && f.recessed)
+        ? { width: f.width, from: f.fromFloor, to: f.toFloor }
+        : null;
+    if (!recessed) continue;
+
+    const bottom = Math.max(recessed.from, fromFloor);
+    const top = Math.min(recessed.to, toFloor, m.floors - 1);
+    if (top < bottom) continue;
+
+    const width = Math.min(recessed.width, segment.length);
+    // The same clamp the geometry uses, so the hole and the recess agree.
+    const half = width / 2 / segment.length;
+    const t = Math.max(half, Math.min(1 - half, f.along));
+
+    const px = segment.start[0] + (segment.end[0] - segment.start[0]) * t;
+    const pz = segment.start[1] + (segment.end[1] - segment.start[1]) * t;
+    const midX = (segment.start[0] + segment.end[0]) / 2;
+    const midZ = (segment.start[1] + segment.end[1]) / 2;
+    // Local +X of a wall rotated by atan2(nx, nz) points along (nz, -nx).
+    const alongWall = (px - midX) * segment.normal[1] - (pz - midZ) * segment.normal[0];
+
+    out.push({
+      u: segment.length / 2 + alongWall - width / 2,
+      v: (bottom - fromFloor) * m.fth,
+      width,
+      height: (top - bottom + 1) * m.fth,
+    });
+  }
+
+  return out;
+}
+
 /**
  * Consecutive floors sharing one cladding, within a band.
  *
@@ -138,6 +173,14 @@ export interface MassBand {
   inset: number;
 }
 
+/**
+ * A vertical slice of the building between two setbacks.
+ *
+ * Without setbacks there is one band covering every floor. With them, each band
+ * has its own inset ring, so upper floors are genuinely smaller and the walls,
+ * the roof and the terraces all follow from the same geometry the estimate
+ * measured.
+ */
 export function massBands(m: Mass): MassBand[] {
   const plan = massFootprint(m);
   const base = outerRing(plan);
@@ -220,7 +263,10 @@ export function facadeBuilds(m: Mass): FacadeBuild[] {
           baseY: runBaseY,
           fromFloor: run.fromFloor,
           floors: runFloors,
-          openings: facadeOpenings(m, segment.side, segment.length, runFloors, run.fromFloor),
+          openings: [
+            ...facadeOpenings(m, segment.side, segment.length, runFloors, run.fromFloor),
+            ...recessOpenings(m, segment, run.fromFloor, run.toFloor),
+          ],
           position: new THREE.Vector3(midX, runBaseY, midZ),
           rotationY,
           segment,
