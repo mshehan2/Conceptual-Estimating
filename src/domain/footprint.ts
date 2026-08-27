@@ -417,6 +417,22 @@ export function facadeSegments(f: Footprint): FacadeSegment[] {
  * hand-drawn polygon has no parameters at all. So measure it — scan across
  * the width, and take the shortest solid interval anywhere.
  */
+/** Is a plan point inside the outline and clear of any court? */
+export function pointInFootprint(f: Footprint, x: number, z: number): boolean {
+  if (!pointInRing(outerRing(f), x, z)) return false;
+  return !holeRings(f).some((hole) => pointInRing(hole, x, z));
+}
+
+export function pointInRing(ring: Point[], x: number, z: number): boolean {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, zi] = ring[i];
+    const [xj, zj] = ring[j];
+    if (zi > z !== zj > z && x < ((xj - xi) * (z - zi)) / (zj - zi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
 export function minLimbDepth(f: Footprint, samples = 41): number {
   const rings = [outerRing(f), ...holeRings(f)];
   const bounds = footprintBounds(f);

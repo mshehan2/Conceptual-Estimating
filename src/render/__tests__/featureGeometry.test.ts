@@ -10,11 +10,11 @@
 
 import { describe, expect, it } from "vitest";
 import * as THREE from "three";
-import { makeMassForType, type Mass } from "@/domain/massing";
+import { makeMassForType, massFootprint, type Mass } from "@/domain/massing";
 import { FEATURE_LABELS, makeFeature, type FeatureKind } from "@/domain/features";
 import { featureGeometries } from "../featureGeometry";
 import { massBands, roofGeometry, facadeBuilds, recessOpenings, wallGeometry } from "../massGeometry";
-import type { FootprintShape } from "@/domain/footprint";
+import { pointInFootprint, type FootprintShape } from "@/domain/footprint";
 
 const ALL_KINDS = Object.keys(FEATURE_LABELS) as FeatureKind[];
 
@@ -327,5 +327,61 @@ describe("recesses open the wall in front of them", () => {
         .map((b) => wallGeometry(b).attributes.position.count)
         .reduce((a, n) => a + n, 0);
     expect(area(withLoggia)).toBeGreaterThan(area(solid));
+  });
+});
+
+describe("a roof terrace lands on the roof", () => {
+  /**
+   * The deck centre used to be the mean of the outline's VERTICES, which is
+   * not the centre of anything. On an L it lands in the notch, so a terrace
+   * the estimate was charging for hung in mid-air outside the building.
+   */
+  const cornersOf = (geo: THREE.BufferGeometry) => {
+    geo.computeBoundingBox();
+    const b = geo.boundingBox!;
+    return [
+      [b.min.x, b.min.z], [b.max.x, b.min.z],
+      [b.min.x, b.max.z], [b.max.x, b.max.z],
+      [(b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2],
+    ] as const;
+  };
+
+  const SHAPES: [string, FootprintShape][] = [
+    ["rectangle", { kind: "rect" }],
+    ["L", { kind: "L", armW: 0.45, armD: 0.5, notch: "ne" }],
+    ["L, other corner", { kind: "L", armW: 0.5, armD: 0.45, notch: "sw" }],
+    ["U", { kind: "U", armW: 0.3, courtD: 0.5, open: "S" }],
+    ["T", { kind: "T", stemW: 0.35, barD: 0.4, stem: "N" }],
+    ["courtyard, off centre", { kind: "courtyard", courtW: 0.3, courtD: 0.3, offsetX: 0.2, offsetZ: -0.15 }],
+  ];
+
+  for (const [label, shape] of SHAPES) {
+    it(`sits inside the building — ${label}`, () => {
+      const mass = massWith("terrace", { w: 220, d: 180, floors: 5, shape });
+      const plan = massFootprint(mass);
+      const parts = featureGeometries(mass);
+      expect(parts.length).toBeGreaterThan(0);
+      for (const part of parts) {
+        for (const [px, pz] of cornersOf(part.geometry)) {
+          expect(
+            pointInFootprint(plan, px, pz),
+            `${label}: ${part.material} reaches (${px.toFixed(0)},${pz.toFixed(0)}), outside the building`,
+          ).toBe(true);
+        }
+      }
+    });
+  }
+
+  it("keeps the deck clear of a courtyard rather than spanning it", () => {
+    const mass = massWith("terrace", {
+      w: 260, d: 220, floors: 4,
+      shape: { kind: "courtyard", courtW: 0.45, courtD: 0.45, offsetX: 0, offsetZ: 0 },
+    });
+    const plan = massFootprint(mass);
+    for (const part of featureGeometries(mass)) {
+      for (const [px, pz] of cornersOf(part.geometry)) {
+        expect(pointInFootprint(plan, px, pz)).toBe(true);
+      }
+    }
   });
 });

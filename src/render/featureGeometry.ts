@@ -33,7 +33,7 @@ import type {
   SunshadeFeature,
   TerraceFeature,
 } from "@/domain/features";
-import type { FacadeSegment } from "@/domain/footprint";
+import { footprintBounds, pointInFootprint, type FacadeSegment, type Footprint } from "@/domain/footprint";
 import { massBands, mergeGeometries } from "./massGeometry";
 
 /** Which material a feature's geometry should be drawn with. */
@@ -449,22 +449,86 @@ function connectorGeometry(f: ConnectorFeature, m: Mass, place: Placement): Feat
 }
 
 /** A roof terrace: deck, rail and planters on the highest setback. */
-function terraceGeometry(f: TerraceFeature, m: Mass, bandTopY: number, ring: [number, number][]): FeatureGeometry[] {
+/**
+ * Somewhere on this roof a deck of this size actually fits.
+ *
+ * The centre used to be the mean of the outline's VERTICES, which is not the
+ * centre of anything. On an L it lands in the notch, so a roof terrace the
+ * estimate was charging for hung in mid-air outside the building.
+ *
+ * Scan for a placement instead, and test a grid across the whole deck rather
+ * than only its corners — on a concave plan four corners can each be inside
+ * the building while the middle of the deck spans the court.
+ */
+function fitDeck(
+  plan: Footprint,
+  wantW: number,
+  wantD: number,
+): { x: number; z: number; w: number; d: number } | null {
+  const bounds = footprintBounds(plan);
+  const cx0 = (bounds.minX + bounds.maxX) / 2;
+  const cz0 = (bounds.minZ + bounds.maxZ) / 2;
+
+  for (let attempt = 0; attempt < 6; attempt++) {
+    const scale = 0.82 ** attempt;
+    const dw = wantW * scale;
+    const dd = wantD * scale;
+    const roomX = bounds.maxX - bounds.minX - dw;
+    const roomZ = bounds.maxZ - bounds.minZ - dd;
+    if (roomX < 0 || roomZ < 0) continue;
+
+    let best: { x: number; z: number; score: number } | null = null;
+    const steps = 16;
+    for (let i = 0; i <= steps; i++) {
+      for (let j = 0; j <= steps; j++) {
+        const x = bounds.minX + dw / 2 + (roomX * i) / steps;
+        const z = bounds.minZ + dd / 2 + (roomZ * j) / steps;
+        let ok = true;
+        for (let a = 0; a <= 3 && ok; a++) {
+          for (let b = 0; b <= 3 && ok; b++) {
+            const px = x - dw / 2 + (dw * a) / 3;
+            const pz = z - dd / 2 + (dd * b) / 3;
+            if (!pointInFootprint(plan, px, pz)) ok = false;
+          }
+        }
+        if (!ok) continue;
+        const score = (x - cx0) ** 2 + (z - cz0) ** 2;
+        if (!best || score < best.score) best = { x, z, score };
+      }
+    }
+    if (best) return { x: best.x, z: best.z, w: dw, d: dd };
+  }
+  return null;
+}
+
+function terraceGeometry(
+  f: TerraceFeature,
+  m: Mass,
+  bandTopY: number,
+  ring: [number, number][],
+  holes: [number, number][][] = [],
+): FeatureGeometry[] {
   const side = Math.sqrt(Math.max(1, f.area));
-  const deck = new THREE.BoxGeometry(side, 0.4, side * 0.7);
-  // Sit it on the largest terrace surface available.
-  const cx = ring.reduce((a, [x]) => a + x, 0) / Math.max(1, ring.length);
-  const cz = ring.reduce((a, [, z]) => a + z, 0) / Math.max(1, ring.length);
+  const plan: Footprint = { kind: "polygon", w: m.w, d: m.d, points: ring, holes };
+  const fit = fitDeck(plan, side, side * 0.7);
+  // A roof with nowhere to put a deck draws nothing rather than putting one
+  // over open air. If this ever fires in practice the terrace is the wrong
+  // feature for that mass, and an invisible deck says so more honestly than a
+  // floating one.
+  if (!fit) return [];
+
+  const { x: cx, z: cz, w: deckW, d: deckD } = fit;
+  const deck = new THREE.BoxGeometry(deckW, 0.4, deckD);
   deck.translate(cx, bandTopY + 0.9, cz);
 
   const rails: THREE.BufferGeometry[] = [];
-  const halfW = side / 2;
-  const halfD = (side * 0.7) / 2;
+  const halfW = deckW / 2;
+  const halfD = deckD / 2;
   for (const [dx, dz, w, d] of [
-    [0, halfD, side, 0.15],
-    [0, -halfD, side, 0.15],
-    [halfW, 0, 0.15, side * 0.7],
-    [-halfW, 0, 0.15, side * 0.7],
+    [0, halfD, deckW, 0.15],
+    [0, -halfD, deckW, 0.15],
+    [halfW, 0, 0.15, deckD],
+    [-halfW, 0, 0.15, deckD],
   ] as const) {
     const rail = new THREE.BoxGeometry(w, 3.4, d);
     rail.translate(cx + dx, bandTopY + 2.6, cz + dz);
@@ -479,8 +543,8 @@ function terraceGeometry(f: TerraceFeature, m: Mass, bandTopY: number, ring: [nu
   if (f.planters) {
     const planters: THREE.BufferGeometry[] = [];
     for (let i = 0; i < 4; i++) {
-      const box = new THREE.BoxGeometry(side * 0.18, 2.6, side * 0.12);
-      box.translate(cx + (i / 3 - 0.5) * side * 0.8, bandTopY + 2.2, cz - halfD + 2.5);
+      const box = new THREE.BoxGeometry(deckW * 0.18, 2.6, deckD * 0.17);
+      box.translate(cx + (i / 3 - 0.5) * deckW * 0.8, bandTopY + 2.2, cz - halfD + 2.5);
       planters.push(box);
     }
     out.push({ featureId: f.id, material: "planting", geometry: mergeGeometries(planters)! });
@@ -558,7 +622,7 @@ export function featureGeometries(m: Mass): FeatureGeometry[] {
     if (feature.kind === "terrace") {
       const bands = massBands(m);
       const band = bands.length > 1 ? bands[bands.length - 2] : bands[0];
-      out.push(...terraceGeometry(feature, m, band.baseY + band.height, band.ring));
+      out.push(...terraceGeometry(feature, m, band.baseY + band.height, band.ring, band.holes));
       continue;
     }
     if (feature.kind === "roof_screen") {
