@@ -407,6 +407,44 @@ export function facadeSegments(f: Footprint): FacadeSegment[] {
 }
 
 /** Bounding box of a footprint, useful for camera framing and site fit. */
+/**
+ * The thinnest solid run through the plan in the depth direction, in feet.
+ *
+ * A preset shape takes its arms as fractions of the bounding box, so an L
+ * drawn in a box only as deep as one good floor plate becomes two half-depth
+ * wings. Sizing has to know that, and it cannot read it off the shape's own
+ * parameters: a U opening east has its court cut from the width, and a
+ * hand-drawn polygon has no parameters at all. So measure it — scan across
+ * the width, and take the shortest solid interval anywhere.
+ */
+export function minLimbDepth(f: Footprint, samples = 41): number {
+  const rings = [outerRing(f), ...holeRings(f)];
+  const bounds = footprintBounds(f);
+  const span = bounds.maxX - bounds.minX;
+  if (span <= 0) return f.d;
+
+  let thinnest = Infinity;
+  for (let i = 0; i < samples; i++) {
+    // Offset the sample so it does not land on a vertex, where a scanline
+    // counts an edge twice and reports a limb of zero depth.
+    const x = bounds.minX + (span * (i + 0.5)) / samples;
+    const crossings: number[] = [];
+    for (const ring of rings) {
+      for (let j = 0; j < ring.length; j++) {
+        const [x0, z0] = ring[j];
+        const [x1, z1] = ring[(j + 1) % ring.length];
+        if (x0 <= x === x1 <= x) continue;
+        crossings.push(z0 + ((z1 - z0) * (x - x0)) / (x1 - x0));
+      }
+    }
+    crossings.sort((a, b) => a - b);
+    for (let k = 0; k + 1 < crossings.length; k += 2) {
+      thinnest = Math.min(thinnest, crossings[k + 1] - crossings[k]);
+    }
+  }
+  return Number.isFinite(thinnest) ? thinnest : f.d;
+}
+
 export function footprintBounds(f: Footprint): { minX: number; maxX: number; minZ: number; maxZ: number } {
   const ring = outerRing(f);
   let minX = Infinity;

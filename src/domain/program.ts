@@ -10,7 +10,7 @@
 import { COUNTABLE_CATEGORIES, UNIT_BY_REF, unitArea, type UnitDef } from "@/markets/unitCatalog";
 import { TYPE_BY_ID } from "@/markets/registry";
 import { grossArea, type Mass } from "./massing";
-import { composeFootprint, defaultShape, footprintArea, type FootprintShape } from "./footprint";
+import { composeFootprint, defaultShape, footprintArea, minLimbDepth, type FootprintShape } from "./footprint";
 
 export interface CirculationSettings {
   /** Area per egress stair, per floor. */
@@ -227,7 +227,30 @@ export function shapeAreaRatio(shape: FootprintShape | undefined, w: number, d: 
   return Math.max(0.15, Math.min(1, footprintArea(composeFootprint(shape, w, d)) / box));
 }
 
-/** Footprint that would hold a program at a given floor count. */
+/**
+ * Footprint that would hold a program at a given floor count.
+ *
+ * Depth grows with the program; it is not pinned to the type default. Pinning
+ * it meant every square foot of extra program went into LENGTH, so a 72,000 SF
+ * medical office came out 393ft long and 90ft deep — and once the L-plan took
+ * half that depth for its notch, a 45ft-deep wing on five storeys, which is a
+ * corridor with a view rather than a building.
+ *
+ * Two things bound the box, and the type default serves both:
+ *
+ *   - Proportion. The type's default footprint is scaled uniformly, so depth
+ *     grows with the program and each type keeps its own character. `aspect`
+ *     is only the fallback for a type with no default footprint to read.
+ *   - Limb depth. The type's default depth is the depth of a good floor plate
+ *     for this use, so it is what the THINNEST LIMB should reach — not a
+ *     number the whole box is held at. A shape's arms are fractions of the
+ *     box, so a plan needs a deeper box than a rectangle to get the same
+ *     usable plate out of it.
+ *
+ * Past square the box stops helping, and a program too small to give its type
+ * a full-depth plate simply gets a square one. That is a real constraint, not
+ * a bug to design around.
+ */
 export function fitFootprint(
   netArea: number,
   typeId: string,
@@ -242,15 +265,32 @@ export function fitFootprint(
   // same program whichever shape it is drawn in.
   const fill = shapeAreaRatio(plan, type?.defaults.footprint.w ?? 100, type?.defaults.footprint.d ?? 100);
   const perFloor = Math.max(400, (netArea * grossing) / Math.max(1, floors) / fill);
-  // Hold a plausible bar depth for the type rather than drifting to a square.
   const targetDepth = type?.defaults.footprint.d ?? 66;
-  const w = perFloor / targetDepth;
-  if (w / targetDepth > aspect * 1.8) {
-    // Too long and thin to be one bar — square it up a little.
-    const d = Math.sqrt(perFloor / aspect);
-    return { w: Math.round(perFloor / d), d: Math.round(d) };
+  const targetWidth = type?.defaults.footprint.w;
+
+  // The type's own default footprint states the proportion it wants, so scale
+  // that uniformly rather than imposing one aspect on everything. A townhome
+  // block is a 5:1 bar and a surgery centre is 1.4:1, and both are right; the
+  // fault was never the proportion, it was holding depth fixed so every extra
+  // square foot went into length.
+  const intended = targetWidth ? targetWidth / targetDepth : aspect;
+  let d = Math.max(targetDepth, Math.sqrt(perFloor / Math.max(1, Math.min(6, intended))));
+
+  // Deepen until the thinnest limb is a usable plate. A hand-drawn polygon is
+  // left alone: someone chose those proportions on purpose, and the fitter has
+  // no business overruling them.
+  if (plan.kind !== "polygon") {
+    for (let i = 0; i < 24; i++) {
+      const limb = minLimbDepth(composeFootprint(plan, perFloor / d, d));
+      if (limb >= targetDepth - 0.5) break;
+      // Damped, because a rotated U's limb depth moves with width as well.
+      d *= Math.min(1.6, targetDepth / Math.max(1, limb));
+    }
   }
-  return { w: Math.round(w), d: Math.round(targetDepth) };
+
+  // Never deeper than it is wide. Past square the box cannot help the limb.
+  d = Math.min(d, Math.sqrt(perFloor));
+  return { w: Math.round(perFloor / d), d: Math.round(d) };
 }
 
 /** Every unit ref present in a program, resolved. */
