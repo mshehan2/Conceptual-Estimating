@@ -186,6 +186,59 @@ export function trimMaterial(mode: RenderMode, tint?: number): THREE.Material {
   );
 }
 
+/**
+ * Storefront glazing for lobby volumes.
+ *
+ * Deliberately lighter and less reflective than the vision glass used in the
+ * windows: a lobby is the one place you are meant to see into, and rendering it
+ * in the same dark low-e as the punched openings turns the entrance — usually
+ * the most expensive move on the elevation — into a blank slab.
+ */
+export function storefrontMaterial(mode: RenderMode): THREE.Material {
+  if (mode === "clay") return glassMaterial("clay");
+  if (mode === "program") {
+    return remember("program-storefront", () =>
+      new THREE.MeshStandardMaterial({ color: 0xbcd8ea, roughness: 0.2, metalness: 0.05 }),
+    );
+  }
+  return remember("storefront", () => {
+    const m = new THREE.MeshPhysicalMaterial({
+      color: 0x7c98a6,
+      roughness: 0.05,
+      metalness: 0,
+      reflectivity: 0.4,
+      clearcoat: 0.7,
+      clearcoatRoughness: 0.03,
+      envMapIntensity: 1.5,
+      transparent: true,
+      opacity: 0.82,
+    });
+    return m;
+  });
+}
+
+/**
+ * Metalwork: canopies, screens, shades.
+ *
+ * Deliberately reads as a different family from the cladding — a canopy that
+ * matches the wall it hangs on disappears, and the whole reason to draw one is
+ * that the client can see it.
+ */
+export function metalMaterial(mode: RenderMode, tint?: number): THREE.Material {
+  if (mode === "clay") {
+    return remember("clay-metal", () => new THREE.MeshStandardMaterial({ color: 0xdedad3, roughness: 0.85 }));
+  }
+  if (mode === "program") {
+    const color = tint ?? 0x7d868f;
+    return remember(`program-metal-${color}`, () =>
+      new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.6), roughness: 0.5, metalness: 0.4 }),
+    );
+  }
+  return remember("metal", () =>
+    new THREE.MeshStandardMaterial({ color: 0x4e565d, roughness: 0.38, metalness: 0.68, envMapIntensity: 1.1 }),
+  );
+}
+
 /** Context buildings: present but visibly not scope. */
 export function contextMaterial(): THREE.Material {
   return remember("context", () =>

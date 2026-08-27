@@ -273,7 +273,8 @@ export const useProject = create<ProjectState>((set, get) => {
           const clean = Math.max(1, Math.round(target));
           const seeded = seedProgramForType(s.typeId, clean);
           const floors = s.masses[0]?.floors ?? TYPE_BY_ID[s.typeId]?.defaults.floors ?? 3;
-          const { w, d } = fitFootprint(seeded.netArea, s.typeId, floors);
+          // Resize for the plan the user is actually drawing in, not a rectangle.
+          const { w, d } = fitFootprint(seeded.netArea, s.typeId, floors, 2.6, s.masses[0]?.shape);
           // Resize the primary mass to hold the new target; any additional
           // masses the user added are theirs to manage and are left alone.
           const [primary, ...rest] = s.masses;

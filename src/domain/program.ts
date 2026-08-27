@@ -10,6 +10,7 @@
 import { COUNTABLE_CATEGORIES, UNIT_BY_REF, unitArea, type UnitDef } from "@/markets/unitCatalog";
 import { TYPE_BY_ID } from "@/markets/registry";
 import { grossArea, type Mass } from "./massing";
+import { composeFootprint, defaultShape, footprintArea, type FootprintShape } from "./footprint";
 
 export interface CirculationSettings {
   /** Area per egress stair, per floor. */
@@ -211,16 +212,36 @@ export function seedProgramForType(typeId: string, target: number): SeededProgra
   return { program, support, netArea, capacityUnits };
 }
 
+/**
+ * Fraction of a bounding box a plan shape actually fills.
+ *
+ * An L fills about three quarters of its box and a courtyard rather less, so a
+ * bounding box sized as though the plan were rectangular leaves the building
+ * unable to hold its own program. That shows up as an over-capacity warning and
+ * an inflated cost per square foot, and it is a sizing bug rather than anything
+ * the design did wrong.
+ */
+export function shapeAreaRatio(shape: FootprintShape | undefined, w: number, d: number): number {
+  if (!shape || shape.kind === "rect") return 1;
+  const box = Math.max(1, w * d);
+  return Math.max(0.15, Math.min(1, footprintArea(composeFootprint(shape, w, d)) / box));
+}
+
 /** Footprint that would hold a program at a given floor count. */
 export function fitFootprint(
   netArea: number,
   typeId: string,
   floors: number,
   aspect = 2.6,
+  shape?: FootprintShape,
 ): { w: number; d: number } {
   const type = TYPE_BY_ID[typeId];
   const grossing = type?.defaults.grossing ?? 1.35;
-  const perFloor = Math.max(400, (netArea * grossing) / Math.max(1, floors));
+  const plan = shape ?? defaultShape(type?.plan ?? "rect");
+  // Grow the box by whatever the shape carves out of it, so the plan holds the
+  // same program whichever shape it is drawn in.
+  const fill = shapeAreaRatio(plan, type?.defaults.footprint.w ?? 100, type?.defaults.footprint.d ?? 100);
+  const perFloor = Math.max(400, (netArea * grossing) / Math.max(1, floors) / fill);
   // Hold a plausible bar depth for the type rather than drifting to a square.
   const targetDepth = type?.defaults.footprint.d ?? 66;
   const w = perFloor / targetDepth;

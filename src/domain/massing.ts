@@ -11,6 +11,20 @@
 
 import type { GlazingPreset, RoofKind, SkinKey } from "@/markets/types";
 import { TYPE_BY_ID } from "@/markets/registry";
+import {
+  composeFootprint,
+  defaultShape,
+  facadeSegments,
+  footprintArea,
+  footprintPerimeter,
+  insetRing,
+  outerRing,
+  ringArea,
+  type FacadeSegment,
+  type Footprint,
+  type FootprintShape,
+} from "./footprint";
+import { featuresTakeoff, makeFeature, type Feature, type FeatureKind } from "./features";
 
 export type Facade = "f" | "b" | "l" | "r";
 export const FACADES: Facade[] = ["f", "b", "l", "r"];
@@ -28,8 +42,19 @@ export interface Mass {
   rot: number;
 
   // Volume
+  /** Bounding width of the footprint. */
   w: number;
+  /** Bounding depth of the footprint. */
   d: number;
+  /**
+   * Plan shape within the bounding box. Presets and hand-drawn geometry are the
+   * same type; everything downstream resolves both to a polygon.
+   */
+  shape: FootprintShape;
+  /** Upper-floor setbacks, as an inset in feet from a given floor upward. */
+  stepbacks: { atFloor: number; inset: number }[];
+  /** Canopies, bays, lobby volumes and the rest. Drawn and priced together. */
+  features: Feature[];
   floors: number;
   /** Floor-to-floor height. */
   fth: number;
@@ -100,6 +125,9 @@ export function makeMass(over: Partial<Mass> = {}): Mass {
     rot: 0,
     w: 160,
     d: 66,
+    shape: { kind: "rect" },
+    stepbacks: [],
+    features: [],
     floors: 3,
     fth: 10.5,
     baseElev: 0,
@@ -146,6 +174,9 @@ export function makeMassForType(typeId: string, over: Partial<Mass> = {}): Mass 
     name: type.label,
     w: d.footprint.w,
     d: d.footprint.d,
+    shape: defaultShape(type.plan ?? "rect"),
+    // The type's characteristic moves, placed on the entrance elevation.
+    features: seedFeaturesFor(typeId),
     floors: d.floors,
     fth: d.floorToFloor,
     glz: d.glazing,
@@ -158,6 +189,60 @@ export function makeMassForType(typeId: string, over: Partial<Mass> = {}): Mass 
     gradeRef: d.belowGrade ? d.floors * d.floorToFloor : 0,
     ...over,
   });
+}
+
+/**
+ * The features a building type characteristically has.
+ *
+ * Placed on the longest wall facing south or east, which is where an entrance
+ * usually goes and, more practically, guarantees the arrival move is visible
+ * from the default camera rather than hidden round the back.
+ */
+export function seedFeaturesFor(typeId: string): Feature[] {
+  const type = TYPE_BY_ID[typeId];
+  if (!type?.features?.length) return [];
+
+  const probe = makeMass({
+    typeId,
+    w: type.defaults.footprint.w,
+    d: type.defaults.footprint.d,
+    shape: defaultShape(type.plan ?? "rect"),
+  });
+  const segments = massSegments(probe);
+  const entrance =
+    segments
+      .filter((s) => !s.courtFacing)
+      .sort((a, b) => {
+        const facing = (s: typeof a) => (s.cardinal === "S" ? 2 : s.cardinal === "E" ? 1 : 0);
+        return facing(b) - facing(a) || b.length - a.length;
+      })[0] ?? segments[0];
+
+  // Spread them along the wall. Every seeded feature defaulting to the middle
+  // buries the canopy inside the lobby volume, which is both wrong and
+  // invisible — the two most expensive ways for a feature to be broken.
+  const hasEntranceVolume = type.features.some((f) => f.kind === "lobby" || f.kind === "porte_cochere");
+  const positionFor = (kind: FeatureKind): number => {
+    switch (kind) {
+      case "lobby":
+      case "porte_cochere":
+        return 0.5;
+      case "canopy":
+        // A secondary entrance where the main arrival is already taken.
+        return hasEntranceVolume ? 0.19 : 0.5;
+      case "bay":
+        return 0.8;
+      default:
+        return 0.5;
+    }
+  };
+
+  return type.features.map((seed) =>
+    makeFeature(seed.kind, {
+      segment: entrance?.index ?? 0,
+      along: positionFor(seed.kind),
+      ...(seed.params ?? {}),
+    } as Partial<Feature>),
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -205,9 +290,55 @@ export const skinOf = (m: Mass, side: Facade): SkinKey => m.skins?.[side] ?? m.s
 
 export const wallHeight = (m: Mass) => m.floors * m.fth;
 
-export const footprint = (m: Mass) => m.w * m.d;
+/** The mass's plan as a complete footprint: shape parameters plus its size. */
+export const massFootprint = (m: Mass): Footprint => composeFootprint(m.shape ?? { kind: "rect" }, m.w, m.d);
 
-export const grossArea = (m: Mass) => footprint(m) * m.floors;
+/** Ground floor plate area. Named for what it is, since Footprint is a type. */
+export const footprint = (m: Mass): number => footprintArea(massFootprint(m));
+
+/** Walls of the ground floor, including any facing an enclosed court. */
+export const massSegments = (m: Mass): FacadeSegment[] => facadeSegments(massFootprint(m));
+
+/**
+ * Per-floor plate areas, honouring setbacks.
+ *
+ * A stepback insets the plan from a given floor upward, so upper floors are
+ * genuinely smaller: the area, the envelope and the roof all follow, which is
+ * the whole reason to draw one.
+ */
+export function floorPlates(m: Mass): { floor: number; area: number; inset: number }[] {
+  const plan = massFootprint(m);
+  const base = outerRing(plan);
+  // A court is a hole in every plate, so it is measured once and removed from
+  // each — including from an inset plate, since a setback shrinks the outside
+  // edge and leaves the court where it is.
+  const courtArea = ringArea(base) - footprintArea(plan);
+  const plates: { floor: number; area: number; inset: number }[] = [];
+
+  for (let floor = 0; floor < m.floors; floor++) {
+    const inset = (m.stepbacks ?? [])
+      .filter((s) => floor >= s.atFloor)
+      .reduce((a, s) => a + Math.max(0, s.inset), 0);
+    const ring = inset > 0 ? insetRing(base, inset) : base;
+    // A court does not shrink with a setback, so it is removed at full size.
+    plates.push({ floor, area: Math.max(0, ringArea(ring) - courtArea), inset });
+  }
+  return plates;
+}
+
+export const grossArea = (m: Mass): number => floorPlates(m).reduce((a, p) => a + p.area, 0);
+
+/** Roof area: the top plate, plus any lower roof exposed by a setback. */
+export function roofPlates(m: Mass): number {
+  const plates = floorPlates(m);
+  if (!plates.length) return 0;
+  let total = plates[plates.length - 1].area;
+  // Where a floor is smaller than the one below, the difference becomes roof.
+  for (let i = 1; i < plates.length; i++) {
+    total += Math.max(0, plates[i - 1].area - plates[i].area);
+  }
+  return total;
+}
 
 /** Extra roof rise for a pitched roof, and the gable end wall area. */
 function roofGeometry(m: Mass) {
@@ -238,7 +369,8 @@ export interface EnvelopeTakeoff {
 export function envelopeTakeoff(m: Mass): EnvelopeTakeoff {
   const h = wallHeight(m);
   const { gableWall, slopeFactor } = roofGeometry(m);
-  const grossWall = 2 * (m.w + m.d) * h + gableWall;
+  const plan = massFootprint(m);
+  const segments = facadeSegments(plan);
 
   const glazingOn = m.glz !== "none";
   const { bandH } = glassBand(m);
@@ -249,33 +381,58 @@ export function envelopeTakeoff(m: Mass): EnvelopeTakeoff {
   const glassByType: EnvelopeTakeoff["glassByType"] = {};
   const opaqueBySkin: Record<string, number> = {};
   let glass = 0;
+  let grossWall = 0;
 
-  for (const side of FACADES) {
-    const len = side === "f" || side === "b" ? m.w : m.d;
-    const sideGross = len * h + (isGableSide(m, side) ? gableWall / 2 : 0);
+  // Walk the real walls rather than four notional sides, so an L, a courtyard
+  // and a hand-drawn plan are all measured by the same code. A cardinal
+  // direction still selects which walls a setting applies to, which is how
+  // per-side glazing and cladding keep working on any shape.
+  for (const segment of segments) {
+    const side = segment.side;
+    const gableShare = isGableSide(m, side) ? gableWall / 2 / Math.max(1, countSide(segments, side)) : 0;
+    const segmentGross = segment.length * h + gableShare;
+    grossWall += segmentGross;
 
-    let sideGlass = 0;
+    let segmentGlass = 0;
     if (glazingOn && m.sides[side]) {
       if (m.glz === "punched") {
-        const { n } = punchedLayout(len, m.winW, m.oc, coverage);
-        sideGlass = n * m.winW * bandH * glazedFloors;
+        const { n } = punchedLayout(segment.length, m.winW, m.oc, coverage);
+        segmentGlass = n * m.winW * bandH * glazedFloors;
       } else {
-        sideGlass = len * coverage * bandH * glazedFloors;
+        segmentGlass = segment.length * coverage * bandH * glazedFloors;
       }
-      // Glass can never exceed the wall it sits in.
-      sideGlass = Math.min(sideGlass, sideGross);
+      segmentGlass = Math.min(segmentGlass, segmentGross);
     }
 
-    glass += sideGlass;
-    if (sideGlass > 0) glassByType[glassKey] = (glassByType[glassKey] ?? 0) + sideGlass;
+    glass += segmentGlass;
+    if (segmentGlass > 0) glassByType[glassKey] = (glassByType[glassKey] ?? 0) + segmentGlass;
 
     const skin = skinOf(m, side);
-    opaqueBySkin[skin] = (opaqueBySkin[skin] ?? 0) + Math.max(0, sideGross - sideGlass);
+    opaqueBySkin[skin] = (opaqueBySkin[skin] ?? 0) + Math.max(0, segmentGross - segmentGlass);
   }
 
-  const fp = footprint(m);
-  const roofFlat = m.roof === "flat" ? fp : 0;
-  const roofPitched = m.roof === "flat" ? 0 : fp * slopeFactor;
+  // Features adjust the envelope they sit on: a bay adds its returns and hides
+  // the wall behind, a lobby volume swaps opaque wall for storefront.
+  const adjustments = featuresTakeoff(m.features ?? [], {
+    segments,
+    floors: m.floors,
+    floorToFloor: m.fth,
+    roofPerimeter: footprintPerimeter(plan),
+  });
+
+  if (adjustments.wallDelta !== 0 || adjustments.glazingDelta !== 0) {
+    const defaultSkin = m.skin;
+    const opaqueAdjust = adjustments.wallDelta - adjustments.glazingDelta;
+    opaqueBySkin[defaultSkin] = Math.max(0, (opaqueBySkin[defaultSkin] ?? 0) + opaqueAdjust);
+    grossWall = Math.max(0, grossWall + adjustments.wallDelta);
+    // Storefront is priced on its own line, so the glazing it replaces is
+    // removed here rather than counted twice.
+    glass = Math.max(0, glass);
+  }
+
+  const roofArea = roofPlates(m);
+  const roofFlat = m.roof === "flat" ? roofArea : 0;
+  const roofPitched = m.roof === "flat" ? 0 : roofArea * slopeFactor;
 
   return {
     grossWall,
@@ -287,6 +444,10 @@ export function envelopeTakeoff(m: Mass): EnvelopeTakeoff {
     roofPitched,
   };
 }
+
+/** How many walls face a given cardinal, for splitting a gable end between them. */
+const countSide = (segments: FacadeSegment[], side: Facade): number =>
+  segments.reduce((a, s) => a + (s.side === side ? 1 : 0), 0);
 
 const isGableSide = (m: Mass, side: Facade) =>
   m.roof === "gable" && (m.ridge === "w" ? side === "l" || side === "r" : side === "f" || side === "b");
@@ -310,26 +471,28 @@ export function belowGradeTakeoff(m: Mass): BelowGradeTakeoff {
   const h = wallHeight(m);
   const base = m.baseElev || 0;
   const top = base + h;
-  const sides: [Facade, number][] = [
-    ["f", m.w],
-    ["b", m.w],
-    ["l", m.d],
-    ["r", m.d],
-  ];
+  // Walk the real walls, so a courtyard's inner face and a hand-drawn plan's
+  // odd edges are excavated and waterproofed like any other wall.
+  const segments = massSegments(m);
 
   let buriedWall = 0;
   let exposedWall = 0;
-  let sumGrade = 0;
+  let weightedGrade = 0;
+  let totalLength = 0;
 
-  for (const [side, len] of sides) {
-    const grade = m.grades?.[side] ?? m.gradeRef ?? 0;
-    sumGrade += grade;
+  for (const segment of segments) {
+    const grade = m.grades?.[segment.side] ?? m.gradeRef ?? 0;
+    weightedGrade += grade * segment.length;
+    totalLength += segment.length;
     const buriedH = Math.max(0, Math.min(grade, top) - base);
-    buriedWall += len * buriedH;
-    exposedWall += len * Math.max(0, h - buriedH);
+    buriedWall += segment.length * buriedH;
+    exposedWall += segment.length * Math.max(0, h - buriedH);
   }
 
-  const averageGrade = sumGrade / 4;
+  // Weighted by wall length rather than a flat average of four sides: on an L
+  // or a custom plan the sides are not equal, and a flat mean would misreport
+  // the cut depth the excavation is priced from.
+  const averageGrade = totalLength > 0 ? weightedGrade / totalLength : m.gradeRef ?? 0;
   const cutDepth = Math.max(0, averageGrade - base);
   const fp = footprint(m);
 

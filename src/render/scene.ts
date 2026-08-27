@@ -17,13 +17,16 @@ import {
   contextMaterial,
   glassMaterial,
   groundMaterial,
+  metalMaterial,
   mullionMaterial,
   pavingMaterial,
   roofMaterial,
   scaledWallMaterial,
+  storefrontMaterial,
   trimMaterial,
   type RenderMode,
 } from "./materials";
+import { featureGeometries, type FeatureMaterialKey } from "./featureGeometry";
 import {
   bandGeometry,
   facadeBuilds,
@@ -49,6 +52,43 @@ export interface SceneOptions {
   /** Highlighted mass id, drawn with an outline. */
   selectedMassId?: string | null;
 }
+
+/** Which material a feature part is drawn with. */
+function featureMaterial(
+  key: FeatureMaterialKey,
+  mode: RenderMode,
+  tint: number,
+  skin: Mass["skin"],
+): THREE.Material {
+  switch (key) {
+    case "glazing":
+      return glassMaterial(mode);
+    case "storefront":
+      return storefrontMaterial(mode);
+    case "mullion":
+      return mullionMaterial(mode);
+    case "screen":
+    case "canopy":
+      // Canopies and screens read as metalwork, distinct from the cladding.
+      return metalMaterial(mode, tint);
+    case "trim":
+      return trimMaterial(mode, tint);
+    case "wall":
+    default:
+      return scaledWallMaterial(skin, mode, tint);
+  }
+}
+
+/** Mask category for each feature material, so the AI pass can tell them apart. */
+const MASK_BY_FEATURE_MATERIAL: Record<FeatureMaterialKey, MaskCategory> = {
+  canopy: "trim",
+  glazing: "glass",
+  storefront: "glass",
+  mullion: "mullion",
+  wall: "wall",
+  screen: "trim",
+  trim: "trim",
+};
 
 /** Label a mesh for the semantic mask pass. */
 const tag = (mesh: THREE.Object3D, category: MaskCategory) => {
@@ -119,6 +159,20 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
     bandMesh.receiveShadow = true;
     tag(bandMesh, mass.context ? "context" : "trim");
     group.add(bandMesh);
+  }
+
+  // Architectural features: canopies, bays, lobby volumes, shades, screens.
+  // Same parameters the estimate priced, so the picture and the number agree.
+  if (!mass.context) {
+    for (const built of featureGeometries(mass)) {
+      disposables.push(built.geometry);
+      const mesh = new THREE.Mesh(built.geometry, featureMaterial(built.material, mode, tint, mass.skin));
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+      tag(mesh, MASK_BY_FEATURE_MATERIAL[built.material]);
+      mesh.userData.featureId = built.featureId;
+      group.add(mesh);
+    }
   }
 
   const { roof, parapet } = roofGeometry(mass);

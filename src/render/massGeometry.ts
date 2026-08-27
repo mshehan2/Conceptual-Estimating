@@ -12,7 +12,17 @@
  */
 
 import * as THREE from "three";
-import { FACADES, glassBand, punchedLayout, skinOf, wallHeight, type Facade, type Mass } from "@/domain/massing";
+import { glassBand, punchedLayout, skinOf, wallHeight, type Mass } from "@/domain/massing";
+import { massFootprint } from "@/domain/massing";
+import {
+  facadeSegments,
+  holeRings,
+  insetRing,
+  outerRing,
+  type FacadeSegment,
+  type Facade,
+  type Point,
+} from "@/domain/footprint";
 import type { SkinKey } from "@/markets/types";
 
 export interface Opening {
@@ -40,14 +50,20 @@ export interface FacadeBuild {
 export const WALL_THICKNESS = 0.85;
 
 /** Window layout for one facade, matching what the envelope takeoff measured. */
-export function facadeOpenings(m: Mass, side: Facade): Opening[] {
+export function facadeOpenings(
+  m: Mass,
+  side: Facade,
+  length: number,
+  bandFloors: number,
+  fromFloor: number,
+): Opening[] {
   if (m.glz === "none" || !m.sides[side]) return [];
 
-  const length = side === "f" || side === "b" ? m.w : m.d;
   const { bandH, sill } = glassBand(m);
   if (bandH <= 0) return [];
 
-  const floors = m.glzFloors === "ground" ? 1 : m.floors;
+  // Ground-floor-only glazing belongs to the band that contains the ground floor.
+  const floors = m.glzFloors === "ground" ? (fromFloor === 0 ? 1 : 0) : bandFloors;
   const coverage = Math.max(0, Math.min(1, (m.cov ?? 100) / 100));
   const openings: Opening[] = [];
 
@@ -74,30 +90,110 @@ export function facadeOpenings(m: Mass, side: Facade): Opening[] {
   return openings;
 }
 
-/** The four facades of a mass, with their openings and placement. */
+/**
+ * A vertical slice of the building between two setbacks.
+ *
+ * Without setbacks there is one band covering every floor. With them, each band
+ * has its own inset ring, so upper floors are genuinely smaller and the walls,
+ * the roof and the terraces all follow from the same geometry the estimate
+ * measured.
+ */
+export interface MassBand {
+  fromFloor: number;
+  toFloor: number;
+  /** Inset ring for this band, in plan. */
+  ring: Point[];
+  holes: Point[][];
+  /** Height above the mass base where this band starts. */
+  baseY: number;
+  height: number;
+  inset: number;
+}
+
+export function massBands(m: Mass): MassBand[] {
+  const plan = massFootprint(m);
+  const base = outerRing(plan);
+  const holes = holeRings(plan);
+
+  // Cumulative inset at each floor, then group consecutive floors that share one.
+  const insetAt = (floor: number) =>
+    (m.stepbacks ?? []).filter((s) => floor >= s.atFloor).reduce((a, s) => a + Math.max(0, s.inset), 0);
+
+  const bands: MassBand[] = [];
+  let start = 0;
+  for (let floor = 1; floor <= m.floors; floor++) {
+    const changed = floor === m.floors || insetAt(floor) !== insetAt(start);
+    if (!changed) continue;
+    const inset = insetAt(start);
+    bands.push({
+      fromFloor: start,
+      toFloor: floor - 1,
+      ring: inset > 0 ? insetRing(base, inset) : base,
+      holes,
+      baseY: start * m.fth,
+      height: (floor - start) * m.fth,
+      inset,
+    });
+    start = floor;
+  }
+  return bands.length ? bands : [{ fromFloor: 0, toFloor: m.floors - 1, ring: base, holes, baseY: 0, height: wallHeight(m), inset: 0 }];
+}
+
+export interface FacadeBuild {
+  side: Facade;
+  skin: SkinKey;
+  /** Facade run length, feet. */
+  length: number;
+  height: number;
+  /** Height above the mass base this wall starts at. */
+  baseY: number;
+  /** Floor index this wall's glazing starts counting from. */
+  fromFloor: number;
+  floors: number;
+  openings: Opening[];
+  /** World-space transform placing this facade on the mass. */
+  position: THREE.Vector3;
+  rotationY: number;
+  segment: FacadeSegment;
+}
+
+/**
+ * Every wall of a mass, across every band.
+ *
+ * Walls follow the real plan, so an L, a courtyard and a hand-drawn polygon are
+ * built by the same code that builds a rectangle. A wall is placed at its
+ * segment's midpoint and rotated so its outward face follows the segment
+ * normal, which is the only thing that has to be right for any shape to work.
+ */
 export function facadeBuilds(m: Mass): FacadeBuild[] {
-  const h = wallHeight(m);
-  const hw = m.w / 2;
-  const hd = m.d / 2;
+  const builds: FacadeBuild[] = [];
 
-  // Each facade is authored as a flat panel in its own local frame, then
-  // rotated into place. Front faces +z, back -z, left -x, right +x.
-  const placement: Record<Facade, { position: THREE.Vector3; rotationY: number; length: number }> = {
-    f: { position: new THREE.Vector3(0, 0, hd), rotationY: 0, length: m.w },
-    b: { position: new THREE.Vector3(0, 0, -hd), rotationY: Math.PI, length: m.w },
-    l: { position: new THREE.Vector3(-hw, 0, 0), rotationY: -Math.PI / 2, length: m.d },
-    r: { position: new THREE.Vector3(hw, 0, 0), rotationY: Math.PI / 2, length: m.d },
-  };
+  for (const band of massBands(m)) {
+    const segments = facadeSegments({ kind: "polygon", w: m.w, d: m.d, points: band.ring, holes: band.holes });
+    const floors = band.toFloor - band.fromFloor + 1;
 
-  return FACADES.map((side) => ({
-    side,
-    skin: skinOf(m, side),
-    length: placement[side].length,
-    height: h,
-    openings: facadeOpenings(m, side),
-    position: placement[side].position,
-    rotationY: placement[side].rotationY,
-  }));
+    for (const segment of segments) {
+      const midX = (segment.start[0] + segment.end[0]) / 2;
+      const midZ = (segment.start[1] + segment.end[1]) / 2;
+      builds.push({
+        side: segment.side,
+        skin: skinOf(m, segment.side),
+        length: segment.length,
+        height: band.height,
+        baseY: band.baseY,
+        fromFloor: band.fromFloor,
+        floors,
+        openings: facadeOpenings(m, segment.side, segment.length, floors, band.fromFloor),
+        position: new THREE.Vector3(midX, band.baseY, midZ),
+        // atan2(nx, nz) turns the outward normal into a Y rotation, which is
+        // what lets a wall sit on a diagonal edge as happily as on a cardinal one.
+        rotationY: Math.atan2(segment.normal[0], segment.normal[1]),
+        segment,
+      });
+    }
+  }
+
+  return builds;
 }
 
 /**
@@ -251,30 +347,121 @@ export function bandGeometry(m: Mass): { base: THREE.BufferGeometry | null; reve
   return { base, reveals: merged };
 }
 
-/** Roof and parapet for a mass, in local coordinates. */
-export function roofGeometry(m: Mass): { roof: THREE.BufferGeometry; parapet: THREE.BufferGeometry | null } {
-  const h = wallHeight(m);
+/** A ring (and its holes) as a THREE.Shape, for slab and roof geometry. */
+function ringShape(ring: Point[], holes: Point[][]): THREE.Shape {
+  const shape = new THREE.Shape(ring.map(([x, z]) => new THREE.Vector2(x, z)));
+  for (const hole of holes) {
+    shape.holes.push(new THREE.Path(hole.map(([x, z]) => new THREE.Vector2(x, z))));
+  }
+  return shape;
+}
 
-  if (m.roof === "flat") {
-    const roof = new THREE.BoxGeometry(m.w, 0.6, m.d);
-    roof.translate(0, h + 0.3, 0);
-    applyBoxUV(roof);
+/** A horizontal slab from a ring, at a given height and thickness. */
+function slabFromRing(ring: Point[], holes: Point[][], y: number, thickness: number): THREE.BufferGeometry {
+  const geo = new THREE.ExtrudeGeometry(ringShape(ring, holes), {
+    depth: thickness,
+    bevelEnabled: false,
+    curveSegments: 1,
+  });
+  // Extruded in +Z in shape space; lay it flat and lift it into place.
+  geo.rotateX(-Math.PI / 2);
+  geo.translate(0, y + thickness, 0);
+  applyBoxUV(geo);
+  return geo;
+}
 
-    // A parapet is what stops a flat roof reading as a sliced-off box.
-    const height = 3.2;
-    const t = 0.9;
-    const parts = [
-      boxAt(m.w, height, t, 0, h + height / 2, m.d / 2 - t / 2),
-      boxAt(m.w, height, t, 0, h + height / 2, -m.d / 2 + t / 2),
-      boxAt(t, height, m.d - t * 2, -m.w / 2 + t / 2, h + height / 2, 0),
-      boxAt(t, height, m.d - t * 2, m.w / 2 - t / 2, h + height / 2, 0),
-    ];
-    const parapet = mergeGeometries(parts);
-    if (parapet) applyBoxUV(parapet);
-    return { roof, parapet };
+/** A vertical band following a ring — used for parapets and cornices. */
+function bandFromRing(
+  ring: Point[],
+  y: number,
+  height: number,
+  thickness: number,
+  outward: number,
+): THREE.BufferGeometry | null {
+  const parts: THREE.BufferGeometry[] = [];
+  for (let i = 0; i < ring.length; i++) {
+    const [x0, z0] = ring[i];
+    const [x1, z1] = ring[(i + 1) % ring.length];
+    const dx = x1 - x0;
+    const dz = z1 - z0;
+    const length = Math.hypot(dx, dz);
+    if (length < 0.05) continue;
+
+    // Overlap each run by the band thickness so corners close cleanly rather
+    // than leaving a notch at every vertex.
+    const box = new THREE.BoxGeometry(length + thickness, height, thickness);
+    const nx = dz / length;
+    const nz = -dx / length;
+    box.translate(0, 0, 0);
+    box.rotateY(Math.atan2(nx, nz));
+    box.translate((x0 + x1) / 2 + nx * outward, y + height / 2, (z0 + z1) / 2 + nz * outward);
+    parts.push(box);
+  }
+  const merged = mergeGeometries(parts);
+  if (merged) applyBoxUV(merged);
+  return merged;
+}
+
+/**
+ * Roof, terraces and parapets for a mass.
+ *
+ * With setbacks, each band gets its own roof and parapet, and the difference
+ * between one band and the one below becomes a terrace — the same geometry the
+ * takeoff already counted as roof area.
+ */
+export function roofGeometry(m: Mass): {
+  roof: THREE.BufferGeometry;
+  parapet: THREE.BufferGeometry | null;
+} {
+  const bands = massBands(m);
+  const roofs: THREE.BufferGeometry[] = [];
+  const parapets: THREE.BufferGeometry[] = [];
+
+  // A pitched roof is only meaningful over a simple rectangular plan; anything
+  // else gets a flat roof, which is what the estimate prices it as too.
+  const pitchedAllowed = (m.shape?.kind ?? "rect") === "rect" && m.roof !== "flat" && bands.length === 1;
+
+  if (pitchedAllowed) {
+    const pitched = pitchedRoof(m);
+    return { roof: pitched, parapet: null };
   }
 
-  // Pitched: a prism along the ridge for a gable, a true hip for a hip roof.
+  for (let i = 0; i < bands.length; i++) {
+    const band = bands[i];
+    const top = band.baseY + band.height;
+
+    if (i === bands.length - 1) {
+      roofs.push(slabFromRing(band.ring, band.holes, top, 0.6));
+    } else {
+      // Terrace: the part of this band's roof not covered by the band above.
+      const above = bands[i + 1];
+      const terrace = new THREE.ExtrudeGeometry(
+        (() => {
+          const shape = ringShape(band.ring, band.holes);
+          shape.holes.push(new THREE.Path(above.ring.map(([x, z]) => new THREE.Vector2(x, z))));
+          return shape;
+        })(),
+        { depth: 0.6, bevelEnabled: false, curveSegments: 1 },
+      );
+      terrace.rotateX(-Math.PI / 2);
+      terrace.translate(0, top + 0.6, 0);
+      applyBoxUV(terrace);
+      roofs.push(terrace);
+    }
+
+    const parapet = bandFromRing(band.ring, top, 3.2, 0.9, -0.45);
+    if (parapet) parapets.push(parapet);
+  }
+
+  return {
+    roof: mergeGeometries(roofs) ?? new THREE.BufferGeometry(),
+    parapet: mergeGeometries(parapets),
+  };
+}
+
+/** The original prism/hip roof, still used for simple rectangular plans. */
+function pitchedRoof(m: Mass): THREE.BufferGeometry {
+  const h = wallHeight(m);
   const alongX = m.ridge === "w";
   const across = alongX ? m.d : m.w;
   const along = alongX ? m.w : m.d;
@@ -284,38 +471,38 @@ export function roofGeometry(m: Mass): { roof: THREE.BufferGeometry; parapet: TH
   const v: number[] = [];
   const push = (a: number[], b: number[], c: number[]) => v.push(...a, ...b, ...c);
 
-  // Eave corners and ridge ends, in a frame where the ridge runs along x.
   const e = [
     [-along / 2, h, -across / 2],
     [along / 2, h, -across / 2],
     [along / 2, h, across / 2],
     [-along / 2, h, across / 2],
   ];
-  const r0 = [-ridgeHalf, h + rise, 0];
-  const r1 = [ridgeHalf, h + rise, 0];
+  const R0 = [-ridgeHalf, h + rise, 0];
+  const R1 = [ridgeHalf, h + rise, 0];
 
-  push(e[0], e[1], r1); push(e[0], r1, r0);          // back slope
-  push(e[2], e[3], r0); push(e[2], r0, r1);          // front slope
+  push(e[0], e[1], R1); push(e[0], R1, R0);
+  push(e[2], e[3], R0); push(e[2], R0, R1);
   if (m.roof === "hip") {
-    push(e[1], e[2], r1);                             // right hip
-    push(e[3], e[0], r0);                             // left hip
+    push(e[1], e[2], R1);
+    push(e[3], e[0], R0);
   } else {
-    push(e[1], e[0], r0); push(e[1], r0, r1);        // gable ends handled by wall
+    push(e[1], e[0], R0); push(e[1], R0, R1);
   }
 
   const geo = new THREE.BufferGeometry();
-  const positions = new Float32Array(v);
-  geo.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geo.setAttribute("position", new THREE.BufferAttribute(new Float32Array(v), 3));
   geo.computeVertexNormals();
   applyBoxUV(geo);
   if (!alongX) geo.rotateY(Math.PI / 2);
-
-  return { roof: geo, parapet: null };
+  return geo;
 }
 
-/** Triangular gable end infill, so a pitched roof does not float over a gap. */
+/**
+ * Triangular gable end infill, so a pitched roof does not float over a gap.
+ * Only meaningful where a pitched roof is: a simple rectangular plan.
+ */
 export function gableGeometry(m: Mass): THREE.BufferGeometry | null {
-  if (m.roof !== "gable") return null;
+  if (m.roof !== "gable" || (m.shape?.kind ?? "rect") !== "rect") return null;
   const h = wallHeight(m);
   const alongX = m.ridge === "w";
   const across = alongX ? m.d : m.w;

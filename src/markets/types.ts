@@ -8,6 +8,8 @@
  */
 
 import type { Uom } from "@/costs/schema";
+import type { FootprintKind } from "@/domain/footprint";
+import type { FeatureKind } from "@/domain/features";
 
 /** Glazing strategy presets carried over from the massing engine. */
 export type GlazingPreset = "none" | "punched" | "strip" | "full";
@@ -78,6 +80,12 @@ export interface TypeDefaults {
   belowGrade?: boolean;
 }
 
+/** A feature a building type seeds, with any parameters that differ from default. */
+export interface SeedFeature {
+  kind: FeatureKind;
+  params?: Record<string, unknown>;
+}
+
 /** Observed net-to-gross efficiency band for a type, as fractions 0..1. */
 export interface EfficiencyBand {
   low: number;
@@ -112,6 +120,16 @@ export interface BuildingTypeDef {
   /** Plural noun for the capacity, e.g. "apartments", "keys", "beds". */
   capacityLabel: string;
   defaults: TypeDefaults;
+  /** Plan shape this type is usually built in. Defaults to a rectangle. */
+  plan?: FootprintKind;
+  /**
+   * Features the type characteristically has. An MOB has an entry canopy and a
+   * glazed lobby; a full-service hotel has a porte cochere. Seeding them means
+   * a new scheme looks like the building it claims to be, and it means the
+   * arrival move is in the estimate from the first minute rather than being
+   * remembered later.
+   */
+  features?: SeedFeature[];
   efficiency: EfficiencyBand;
   /** Unit catalog refs available to this type, in menu order. */
   unitRefs: string[];

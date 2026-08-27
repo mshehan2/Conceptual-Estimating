@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { CostResolver } from "@/costs/resolver";
 import { SeedCostSource } from "@/costs/sources/seedSource";
 import { OverrideCostSource } from "@/costs/sources/overrideSource";
-import { makeMass, envelopeTakeoff, belowGradeTakeoff, facadeCardinal } from "../massing";
+import { makeMass, makeMassForType, envelopeTakeoff, belowGradeTakeoff, facadeCardinal } from "../massing";
 import { capacity, circulation, fitFootprint, seedProgramForType, netProgramArea } from "../program";
 import { takeoff } from "../takeoff";
 import { estimateScheme, priceBottomUp, reconcile } from "../estimate";
@@ -80,8 +80,11 @@ describe("capacity check", () => {
   it("fits a footprint that actually holds the program", () => {
     const seeded = seedProgramForType("mf_wrap", 200);
     const floors = 5;
+    // Size and shape must be decided together: a box sized for a U-plan and
+    // then built as a rectangle is oversized, and the reverse cannot hold its
+    // program. makeMassForType applies the same shape fitFootprint sized for.
     const { w, d } = fitFootprint(seeded.netArea, "mf_wrap", floors);
-    const sized = makeMass({ w, d, floors, typeId: "mf_wrap", program: seeded.program });
+    const sized = makeMassForType("mf_wrap", { w, d, floors, program: seeded.program });
     const c = capacity(sized);
     // Sized for the grossed program; the core pushes it a little over, which is
     // exactly the nudge the user is meant to see and resolve.
@@ -104,7 +107,7 @@ describe("estimate", () => {
     const seeded = seedProgramForType("mf_wrap", 200);
     const floors = 5;
     const { w, d } = fitFootprint(seeded.netArea, "mf_wrap", floors);
-    return [makeMass({ w, d, floors, typeId: "mf_wrap", program: seeded.program })];
+    return [makeMassForType("mf_wrap", { w, d, floors, program: seeded.program })];
   };
 
   it("prices every quantity the takeoff produces", async () => {

@@ -13,10 +13,15 @@ import type { Uom } from "@/costs/schema";
 import {
   belowGradeTakeoff,
   envelopeTakeoff,
+  floorPlates,
   footprint,
   grossArea,
+  massSegments,
   type Mass,
 } from "./massing";
+import { featuresTakeoff } from "./features";
+import { footprintPerimeter } from "./footprint";
+import { massFootprint } from "./massing";
 import {
   circulation,
   netProgramArea,
@@ -159,7 +164,11 @@ export function takeoff(
       add(q, "waterproofing", bg.buriedWall);
 
       // --- Structure ---
-      add(q, "elevated_floor", fp * Math.max(0, m.floors - 1));
+      // Sum the actual upper plates rather than multiplying the ground floor:
+      // with a setback the upper floors are smaller, and that is the point of
+      // drawing one.
+      const plates = floorPlates(m);
+      add(q, "elevated_floor", plates.slice(1).reduce((a, plate) => a + plate.area, 0));
 
       // --- Envelope ---
       const env = envelopeTakeoff(m);
@@ -177,6 +186,20 @@ export function takeoff(
       for (const key of ["int_framing", "paint", "ceiling", "flooring", "base_trim", "sprinkler", "hvac", "electrical"]) {
         add(q, key, area);
       }
+    }
+
+    // --- Architectural features ---
+    // A canopy in the render is a canopy in the estimate, from the same
+    // parameters. The envelope adjustments were already applied inside
+    // envelopeTakeoff; these are the features' own priced lines.
+    if (hasShell) {
+      const featureQuantities = featuresTakeoff(m.features ?? [], {
+        segments: massSegments(m),
+        floors: m.floors,
+        floorToFloor: m.fth,
+        roofPerimeter: footprintPerimeter(massFootprint(m)),
+      }).quantities;
+      for (const [key, value] of Object.entries(featureQuantities)) add(q, key, value);
     }
 
     // --- $/GSF allowances ---

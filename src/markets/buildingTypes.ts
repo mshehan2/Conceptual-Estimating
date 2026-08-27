@@ -23,6 +23,12 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 34, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 250, bay: { w: 26, d: 30 }, parkingRatio: 1.1,
     },
+    plan: "U",
+    features: [
+      { kind: "porte_cochere", params: { width: 36, projection: 22, height: 15 } },
+      { kind: "lobby", params: { width: 40, projection: 7, floors: 2 } },
+      { kind: "bay", params: { width: 14, projection: 3 } },
+    ],
     efficiency: { low: 0.68, typical: 0.74, high: 0.79 },
     unitRefs: ["il_studio", "il_1br", "il_1br_den", "il_2br", "il_2br_den", "il_cottage"],
     programMix: [
@@ -56,6 +62,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 30, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 200, bay: { w: 22, d: 28 }, parkingRatio: 0.5,
     },
+    features: [
+      { kind: "canopy", params: { width: 26, projection: 10, support: "column" } },
+      { kind: "lobby", params: { width: 34, projection: 6, floors: 1 } },
+    ],
     efficiency: { low: 0.62, typical: 0.68, high: 0.73 },
     unitRefs: ["al_studio", "al_1br", "al_companion"],
     programMix: [
@@ -86,6 +96,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 26, skin: "fiber_cement", roof: "gable",
       structure: "wood_frame", travelDistance: 200, parkingRatio: 0.4,
     },
+    plan: "courtyard",
+    features: [
+      { kind: "canopy", params: { width: 20, projection: 8 } },
+    ],
     efficiency: { low: 0.55, typical: 0.62, high: 0.68 },
     unitRefs: ["mc_private", "mc_companion"],
     programMix: [
@@ -114,6 +128,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 28, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 200, parkingRatio: 0.45,
     },
+    features: [
+      { kind: "canopy", params: { width: 24, projection: 10, support: "column" } },
+    ],
     efficiency: { low: 0.5, typical: 0.58, high: 0.64 },
     unitRefs: ["snf_private", "snf_semi"],
     programMix: [
@@ -143,6 +160,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 32, skin: "brick", roof: "flat",
       structure: "podium", travelDistance: 250, parkingRatio: 0.9,
     },
+    plan: "U",
+    features: [
+      { kind: "porte_cochere", params: { width: 40, projection: 24 } },
+      { kind: "lobby", params: { width: 50, projection: 8, floors: 2 } },
+    ],
     efficiency: { low: 0.63, typical: 0.7, high: 0.76 },
     unitRefs: ["il_1br", "il_2br", "al_studio", "al_1br", "mc_private", "snf_private"],
     programMix: [
@@ -207,6 +229,13 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 55, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250, bay: { w: 30, d: 30 }, parkingRatio: 0,
     },
+    plan: "L",
+    features: [
+      { kind: "canopy", params: { width: 28, projection: 9, height: 13 } },
+      { kind: "lobby", params: { width: 44, projection: 7, floors: 2 } },
+      { kind: "sunshade", params: { coverage: 0.85, projection: 3 } },
+      { kind: "roof_screen", params: { coverage: 0.5, material: "louver" } },
+    ],
     efficiency: { low: 0.6, typical: 0.68, high: 0.74 },
     unitRefs: ["exam_op", "clin_proc", "clin_lab", "clin_imaging_ct", "off_private", "amen_lobby"],
     programMix: [
@@ -232,6 +261,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 24, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 200, parkingRatio: 0,
     },
+    features: [
+      { kind: "porte_cochere", params: { width: 34, projection: 20, height: 15 } },
+      { kind: "lobby", params: { width: 32, projection: 6, floors: 1 } },
+    ],
     efficiency: { low: 0.48, typical: 0.56, high: 0.62 },
     unitRefs: ["or_general", "or_specialty", "clin_prepop", "clin_sterile", "exam_op"],
     programMix: [
@@ -259,6 +292,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 45, skin: "fiber_cement", roof: "flat",
       structure: "light_gauge", travelDistance: 250, parkingRatio: 0,
     },
+    features: [
+      { kind: "canopy", params: { width: 22, projection: 8 } },
+      { kind: "lobby", params: { width: 28, projection: 5, floors: 1 } },
+    ],
     efficiency: { low: 0.6, typical: 0.66, high: 0.72 },
     unitRefs: ["exam_op", "clin_proc", "clin_lab", "off_private"],
     programMix: [
@@ -283,6 +320,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 48, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 200, bay: { w: 30, d: 32 }, highRise: true,
     },
+    features: [
+      { kind: "porte_cochere", params: { width: 46, projection: 26, height: 16 } },
+      { kind: "lobby", params: { width: 60, projection: 8, floors: 2 } },
+      { kind: "roof_screen", params: { coverage: 0.8, material: "panel", height: 12 } },
+    ],
     efficiency: { low: 0.42, typical: 0.52, high: 0.58 },
     unitRefs: ["bed_medsurg", "bed_icu", "clin_ldr", "sup_nurse"],
     programMix: [
@@ -307,6 +349,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 22, skin: "precast", roof: "flat",
       structure: "steel", travelDistance: 200,
     },
+    features: [
+      { kind: "porte_cochere", params: { width: 40, projection: 26, height: 16 } },
+      { kind: "roof_screen", params: { coverage: 0.7, material: "panel" } },
+    ],
     efficiency: { low: 0.44, typical: 0.52, high: 0.58 },
     unitRefs: ["ed_bay", "clin_trauma", "clin_imaging_ct", "sup_nurse"],
     programMix: [
@@ -378,6 +424,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 30, skin: "brick", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.2,
     },
+    plan: "L",
+    features: [
+      { kind: "canopy", params: { width: 22, projection: 8 } },
+      { kind: "lobby", params: { width: 36, projection: 6, floors: 2 } },
+    ],
     efficiency: { low: 0.64, typical: 0.7, high: 0.76 },
     unitRefs: ["dorm_double", "dorm_single", "dorm_suite", "dorm_apt", "amen_study"],
     programMix: [
@@ -406,6 +457,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 52, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250, bay: { w: 30, d: 30 },
     },
+    features: [
+      { kind: "lobby", params: { width: 48, projection: 8, floors: 2 } },
+      { kind: "sunshade", params: { coverage: 0.8, projection: 3.5 } },
+    ],
     efficiency: { low: 0.58, typical: 0.65, high: 0.71 },
     unitRefs: ["edu_classroom", "edu_lecture", "edu_seminar", "off_faculty", "amen_study"],
     programMix: [
@@ -431,6 +486,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 45, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 200, bay: { w: 32, d: 32 },
     },
+    features: [
+      { kind: "sunshade", params: { coverage: 0.9, projection: 4 } },
+      { kind: "roof_screen", params: { coverage: 0.9, material: "louver", height: 14 } },
+      { kind: "lobby", params: { width: 40, projection: 7, floors: 2 } },
+    ],
     efficiency: { low: 0.5, typical: 0.58, high: 0.65 },
     unitRefs: ["edu_lab_wet", "edu_lab_dry", "edu_classroom", "off_faculty", "edu_maker"],
     programMix: [
@@ -456,6 +516,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "full", glazingCoverage: 62, skin: "curtain_wall", roof: "flat",
       structure: "steel", travelDistance: 250,
     },
+    features: [
+      { kind: "canopy", params: { width: 34, projection: 12, support: "suspended" } },
+      { kind: "lobby", params: { width: 56, projection: 9, floors: 2 } },
+    ],
     efficiency: { low: 0.6, typical: 0.66, high: 0.72 },
     unitRefs: ["amen_dining", "amen_kitchen", "amen_lobby", "edu_seminar", "amen_activity"],
     programMix: [
@@ -506,6 +570,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "full", glazingCoverage: 58, skin: "curtain_wall", roof: "flat",
       structure: "concrete", travelDistance: 250,
     },
+    features: [
+      { kind: "sunshade", params: { coverage: 0.9, projection: 4 } },
+      { kind: "lobby", params: { width: 44, projection: 8, floors: 2 } },
+    ],
     efficiency: { low: 0.66, typical: 0.72, high: 0.78 },
     unitRefs: ["amen_study", "edu_seminar", "off_private", "amen_lobby"],
     programMix: [
@@ -532,6 +600,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 24, skin: "fiber_cement", roof: "gable",
       structure: "wood_frame", travelDistance: 250, parkingRatio: 1.6,
     },
+    features: [
+      { kind: "bay", params: { width: 10, projection: 2 } },
+    ],
     efficiency: { low: 0.8, typical: 0.85, high: 0.89 },
     unitRefs: ["apt_studio", "apt_1br", "apt_2br", "apt_3br"],
     programMix: [
@@ -557,6 +628,12 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 28, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 250, parkingRatio: 1.3,
     },
+    plan: "U",
+    features: [
+      { kind: "canopy", params: { width: 20, projection: 7 } },
+      { kind: "lobby", params: { width: 30, projection: 5, floors: 1 } },
+      { kind: "bay", params: { width: 12, projection: 2.5 } },
+    ],
     efficiency: { low: 0.76, typical: 0.82, high: 0.86 },
     unitRefs: ["apt_studio", "apt_1br", "apt_1br_den", "apt_2br", "apt_3br"],
     programMix: [
@@ -586,6 +663,12 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 32, skin: "fiber_cement", roof: "flat",
       structure: "podium", travelDistance: 250, parkingRatio: 1.0,
     },
+    plan: "L",
+    features: [
+      { kind: "canopy", params: { width: 22, projection: 8 } },
+      { kind: "lobby", params: { width: 34, projection: 6, floors: 2 } },
+      { kind: "bay", params: { width: 14, projection: 3 } },
+    ],
     efficiency: { low: 0.74, typical: 0.8, high: 0.85 },
     unitRefs: ["apt_studio", "apt_1br", "apt_1br_den", "apt_2br", "apt_3br"],
     programMix: [
@@ -615,6 +698,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "full", glazingCoverage: 70, skin: "curtain_wall", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.8, highRise: true,
     },
+    features: [
+      { kind: "canopy", params: { width: 24, projection: 10, support: "suspended" } },
+      { kind: "lobby", params: { width: 42, projection: 7, floors: 2 } },
+      { kind: "cornice", params: { depth: 2, projection: 1.5 } },
+    ],
     efficiency: { low: 0.7, typical: 0.76, high: 0.81 },
     unitRefs: ["apt_studio", "apt_1br", "apt_2br", "apt_3br", "apt_penthouse"],
     programMix: [
@@ -692,6 +780,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 30, skin: "fiber_cement", roof: "flat",
       structure: "light_gauge", travelDistance: 250, parkingRatio: 1.0,
     },
+    features: [
+      { kind: "canopy", params: { width: 26, projection: 12, support: "column" } },
+      { kind: "lobby", params: { width: 34, projection: 6, floors: 1 } },
+    ],
     efficiency: { low: 0.7, typical: 0.75, high: 0.8 },
     unitRefs: ["hotel_king", "hotel_double", "hotel_suite", "amen_lobby", "amen_fitness"],
     programMix: [
@@ -743,6 +835,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 48, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.8, highRise: true,
     },
+    features: [
+      { kind: "porte_cochere", params: { width: 48, projection: 28, height: 17 } },
+      { kind: "lobby", params: { width: 64, projection: 9, floors: 2 } },
+      { kind: "cornice", params: { depth: 2.5, projection: 2 } },
+    ],
     efficiency: { low: 0.6, typical: 0.66, high: 0.72 },
     unitRefs: ["hotel_king", "hotel_double", "hotel_suite", "amen_ballroom", "amen_kitchen", "amen_dining"],
     programMix: [
@@ -773,6 +870,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 52, skin: "brick", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.4,
     },
+    features: [
+      { kind: "canopy", params: { width: 20, projection: 8, support: "suspended" } },
+      { kind: "lobby", params: { width: 30, projection: 5, floors: 2 } },
+      { kind: "cornice", params: { depth: 2, projection: 1.5 } },
+    ],
     efficiency: { low: 0.58, typical: 0.66, high: 0.72 },
     unitRefs: ["hotel_king", "hotel_suite", "amen_dining", "amen_lobby"],
     programMix: [
@@ -803,6 +905,12 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "full", glazingCoverage: 68, skin: "curtain_wall", roof: "flat",
       structure: "steel", travelDistance: 300, bay: { w: 30, d: 40 },
     },
+    features: [
+      { kind: "canopy", params: { width: 30, projection: 12, support: "suspended" } },
+      { kind: "lobby", params: { width: 50, projection: 8, floors: 2 } },
+      { kind: "sunshade", params: { coverage: 0.9, projection: 3.5 } },
+      { kind: "roof_screen", params: { coverage: 0.5, material: "louver" } },
+    ],
     efficiency: { low: 0.82, typical: 0.87, high: 0.91 },
     unitRefs: ["off_open", "off_private", "amen_lobby"],
     programMix: [{ unitRef: "off_open", share: 1 }],
@@ -848,6 +956,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 32, skin: "metal_panel", roof: "flat",
       structure: "steel", travelDistance: 300, bay: { w: 40, d: 40 },
     },
+    features: [
+      { kind: "canopy", params: { width: 18, projection: 7 } },
+    ],
     efficiency: { low: 0.8, typical: 0.86, high: 0.9 },
     unitRefs: ["off_open", "edu_lab_dry", "ind_highbay"],
     programMix: [
@@ -874,6 +985,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 8, skin: "tilt_up", roof: "flat",
       structure: "tilt_up", travelDistance: 400, bay: { w: 50, d: 50 },
     },
+    features: [
+      { kind: "canopy", params: { width: 20, projection: 8 } },
+    ],
     efficiency: { low: 0.92, typical: 0.95, high: 0.97 },
     unitRefs: ["ind_highbay", "off_open", "ind_dock"],
     programMix: [
@@ -946,6 +1060,11 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 42, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250, parkingRatio: 0.2,
     },
+    plan: "L",
+    features: [
+      { kind: "canopy", params: { width: 30, projection: 12, support: "column" } },
+      { kind: "lobby", params: { width: 40, projection: 6, floors: 2 } },
+    ],
     efficiency: { low: 0.58, typical: 0.65, high: 0.71 },
     unitRefs: ["edu_classroom", "edu_lab_wet", "amen_dining", "ath_court", "amen_study"],
     programMix: [
@@ -976,6 +1095,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 22, skin: "brick", roof: "gable",
       structure: "steel", travelDistance: 250, parkingRatio: 0.3,
     },
+    features: [
+      { kind: "porte_cochere", params: { width: 34, projection: 20 } },
+    ],
     efficiency: { low: 0.62, typical: 0.7, high: 0.76 },
     unitRefs: ["civ_sanctuary", "edu_classroom", "amen_activity", "amen_kitchen"],
     programMix: [
@@ -1001,6 +1123,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "punched", glazingCoverage: 30, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250,
     },
+    features: [
+      { kind: "canopy", params: { width: 28, projection: 12, support: "column" } },
+      { kind: "cornice", params: { depth: 2.5, projection: 2 } },
+    ],
     efficiency: { low: 0.6, typical: 0.67, high: 0.73 },
     unitRefs: ["off_private", "off_open", "edu_seminar", "civ_apparatus"],
     programMix: [
@@ -1026,6 +1152,10 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       glazing: "strip", glazingCoverage: 38, skin: "metal_panel", roof: "flat",
       structure: "steel", travelDistance: 400,
     },
+    features: [
+      { kind: "canopy", params: { width: 26, projection: 10 } },
+      { kind: "lobby", params: { width: 40, projection: 7, floors: 1 } },
+    ],
     efficiency: { low: 0.68, typical: 0.74, high: 0.8 },
     unitRefs: ["ath_court", "ath_pool", "amen_fitness", "amen_activity", "amen_locker"],
     programMix: [

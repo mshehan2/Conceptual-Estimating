@@ -129,6 +129,22 @@ const ROWS: Row[] = [
   ["fitout_freezer", "Freezer envelope & refrigeration", "SF", 105, 142, 190, "13 21 00", "C3000"],
   ["fitout_cooler", "Cooler envelope & refrigeration", "SF", 72, 98, 132, "13 21 00", "C3000"],
 
+  // ---- Architectural features ----
+  // The moves that make a building read as designed. Each is priced from the
+  // same parameters that draw it, so a canopy in the render is a canopy in the
+  // estimate by construction rather than by anyone remembering to add it.
+  ["canopy_cantilever", "Entry canopy - cantilevered", "SF", 95, 130, 178, "05 50 00", "B1080"],
+  ["canopy_supported", "Entry canopy - column or rod supported", "SF", 78, 105, 145, "05 50 00", "B1080"],
+  ["canopy_column", "Canopy column", "EA", 3800, 5200, 7400, "05 12 00", "B1080"],
+  ["porte_cochere", "Porte cochere structure & roof", "SF", 130, 178, 245, "05 12 00", "B1080"],
+  ["bay_structure", "Projecting bay - framing & floor extension", "SF", 62, 86, 120, "05 40 00", "B1010"],
+  ["storefront", "Storefront / lobby glazing", "SF", 92, 122, 165, "08 43 00", "B2020"],
+  ["sunshade", "Exterior sunshade", "LF", 105, 145, 200, "10 71 13", "B2010"],
+  ["roof_screen_louver", "Rooftop screen - louvered", "SF", 58, 78, 106, "10 82 00", "B3010"],
+  ["roof_screen_panel", "Rooftop screen - solid panel", "SF", 46, 62, 85, "10 82 00", "B3010"],
+  ["roof_screen_mesh", "Rooftop screen - mesh", "SF", 34, 46, 63, "10 82 00", "B3010"],
+  ["cornice", "Cornice / parapet cap band", "LF", 42, 58, 80, "07 71 00", "B3010"],
+
   // ---- $/GSF allowances ----
   // Scope a conceptual benchmark includes but a geometric takeoff cannot see.
   // The base values here are the generic case; each building type's cost

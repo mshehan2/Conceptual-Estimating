@@ -12,6 +12,7 @@ import type { RateOverride } from "@/costs/sources/overrideSource";
 import type { BandPoint, IndirectSettings, MarketAdjustment } from "./estimate";
 import { DEFAULT_ADJUSTMENT, DEFAULT_INDIRECTS } from "./estimate";
 import { makeMassForType, type Mass } from "./massing";
+import { defaultShape } from "./footprint";
 import { DEFAULT_CIRCULATION, fitFootprint, seedProgramForType, type CirculationSettings } from "./program";
 import { DEFAULT_FACTORS, EMPTY_SITE, type SiteQuantities, type TakeoffFactors } from "./takeoff";
 import { MARKET_BY_ID, TYPE_BY_ID, typesForMarket } from "@/markets/registry";
@@ -109,7 +110,8 @@ export function makeScheme(
   const target = opts.targetCapacity ?? defaultCapacityFor(typeId);
   const floors = opts.floors ?? type?.defaults.floors ?? 3;
   const seeded = seedProgramForType(typeId, target);
-  const { w, d } = fitFootprint(seeded.netArea, typeId, floors);
+  // Size the box for the plan shape this type is built in, not for a rectangle.
+  const { w, d } = fitFootprint(seeded.netArea, typeId, floors, 2.6, defaultShape(type?.plan ?? "rect"));
 
   const mass = makeMassForType(typeId, { w, d, floors, program: seeded.program });
   const stamp = now();
