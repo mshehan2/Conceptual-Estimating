@@ -141,13 +141,30 @@ async function main() {
   process.exit(failed ? 1 : 0);
 }
 
-/** Set a labelled range input and fire the event React listens for. */
+/**
+ * Set a labelled range input.
+ *
+ * Assigning `el.value` directly is not enough for a controlled React input:
+ * React keeps its own value tracker, sees no change against it, and swallows
+ * the event, so the control silently keeps its old value. Going through the
+ * prototype's native setter updates the tracker too.
+ *
+ * Verified afterwards rather than assumed — a slider that quietly refuses to
+ * move is exactly the failure this tool exists to catch, and it is no use if
+ * the tool itself cannot tell.
+ */
 async function setSlider(page, label, value) {
   const slider = page.getByLabel(label);
   await slider.evaluate((el, v) => {
-    el.value = String(v);
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set;
+    setter.call(el, String(v));
     el.dispatchEvent(new Event("input", { bubbles: true }));
   }, value);
+
+  const applied = Number(await slider.inputValue());
+  if (applied !== value) {
+    throw new Error(`Slider "${label}" would not accept ${value} — it reads ${applied}`);
+  }
 }
 
 /** Poll until a count goes non-zero, so slow software rendering is tolerated. */
