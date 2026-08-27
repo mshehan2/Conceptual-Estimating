@@ -210,7 +210,9 @@ export function App() {
               <RenderPanel settings={view} onChange={patchView} viewport={viewportRef} />
             )}
             {tab === "photoreal" && <PhotorealPanel viewport={viewportRef} onResult={setPhotorealImage} />}
-            {tab === "sheets" && <SheetPanel viewport={viewportRef} photorealImage={photorealImage} />}
+            {tab === "sheets" && (
+              <SheetPanel viewport={viewportRef} photorealImage={photorealImage} quality={view.maxSamples} />
+            )}
           </div>
         </aside>
       </div>

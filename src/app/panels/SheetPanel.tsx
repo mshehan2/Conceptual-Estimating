@@ -18,9 +18,17 @@ const THUMB_PRESETS = ["aerial", "street", "plan"];
 export function SheetPanel({
   viewport,
   photorealImage,
+  quality,
 }: {
   viewport: React.RefObject<ViewportHandle | null>;
   photorealImage?: string | null;
+  /**
+   * Viewport sample budget. Sheet capture scales off it so the quality slider
+   * on the Render tab governs how long building a sheet takes — on a machine
+   * without a real GPU, a fixed high count is the difference between seconds
+   * and minutes.
+   */
+  quality: number;
 }) {
   const project = useProject((s) => s.project);
   const estimates = useProject((s) => s.estimates);
@@ -42,13 +50,17 @@ export function SheetPanel({
     if (!handle) return;
     setBusy("Framing views");
 
+    const heroSamples = Math.max(24, Math.round(quality * 1.4));
+    const thumbSamples = Math.max(16, Math.round(quality * 0.7));
+    const optionSamples = Math.max(20, Math.round(quality * 0.9));
+
     try {
       const shots: SheetImages = { thumbs: [], bySchemeId: {} };
 
       // Hero and thumbnails for the active scheme.
       handle.applyPreset(HERO_PRESET);
       await settle();
-      shots.hero = (await handle.renderPasses(["beauty"], 1400, 900, 140)).beauty;
+      shots.hero = (await handle.renderPasses(["beauty"], 1400, 900, heroSamples)).beauty;
 
       for (const id of THUMB_PRESETS) {
         const preset = CAMERA_PRESETS.find((p) => p.id === id);
@@ -56,7 +68,7 @@ export function SheetPanel({
         setBusy(`Rendering ${preset.label.toLowerCase()} view`);
         handle.applyPreset(preset);
         await settle();
-        const shot = (await handle.renderPasses(["beauty"], 700, 480, 72)).beauty;
+        const shot = (await handle.renderPasses(["beauty"], 700, 480, thumbSamples)).beauty;
         shots.thumbs.push({ label: preset.label, src: shot });
       }
 
@@ -70,7 +82,7 @@ export function SheetPanel({
           await settle(700);
           handle.applyPreset(HERO_PRESET);
           await settle();
-          shots.bySchemeId[scheme.id] = (await handle.renderPasses(["beauty"], 760, 500, 90)).beauty;
+          shots.bySchemeId[scheme.id] = (await handle.renderPasses(["beauty"], 760, 500, optionSamples)).beauty;
         }
         setActiveScheme(original);
         await settle(400);
