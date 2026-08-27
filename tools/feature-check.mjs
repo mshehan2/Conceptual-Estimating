@@ -312,14 +312,31 @@ async function drawCheck(page) {
     for (let i = 1; i <= 30; i++) await page.mouse.move(cx + i * 14, cy + i * 1.2, { steps: 1 });
     await page.mouse.up();
   }
+  // Deliberately NOT zoomed in. Moving closer makes small features cover more
+  // pixels, which sounds like a better signal and is not: the accumulator
+  // restarts on every edit and lands on a slightly different image each time,
+  // and close up that re-accumulation alone moves tens of thousands of pixels.
+  // The threshold is calibrated against that noise below instead.
 
-  await settle(page);
-  const bare = await signature(page);
+  const bare = await stableSignature(page);
+  check("a settled render is stable", bare !== null,
+    bare ? "0 px of noise" : "the view never stopped moving — measurements below mean nothing");
+  if (!bare) return;
+
   const facing = await facingWall(page, rows, bare);
   console.log(`    camera faces wall ${facing.wall} (${facing.px} px)`);
-  check("a settled render is stable", changedPixels(bare, await signature(page)) === 0,
-    `${changedPixels(bare, await signature(page))} px of noise`);
 
+  // What does a re-accumulation cost on its own? Add a feature and take it away
+  // again: the scene is back where it started, so whatever moved is noise. A
+  // threshold guessed rather than measured is how a check ends up passing
+  // because everything is noise, or failing because nothing is.
+  await page.getByLabel("Add a feature").selectOption("canopy");
+  await settle(page);
+  await clearAll();
+  await settle(page);
+  const floor = changedPixels(bare, await signature(page));
+  const threshold = Math.max(5, floor * 2 + 3);
+  console.log(`    re-accumulation noise ${floor} px, threshold ${threshold} px`);
   const kinds = [
     "canopy", "porte_cochere", "bay", "lobby", "sunshade", "brise_soleil",
     "balcony", "loggia", "feature_corner", "atrium", "connector", "terrace",
@@ -338,13 +355,34 @@ async function drawCheck(page) {
     await settle(page);
   }
 
-  // 5px, not 1px: a settled scene is exactly stable, so anything above a
-  // handful of pixels is geometry. A default entry canopy is 24ft on a 400ft
-  // wall and legitimately lands near the bottom of this range.
-  const missing = drawn.filter((d) => d.px < 5);
+  const missing = drawn.filter((d) => d.px < threshold);
   check("every feature kind draws something", missing.length === 0,
-    missing.length ? missing.map((d) => `${d.kind} ${d.px}px`).join(", ") : `${drawn.length} kinds`);
-  writeFileSync(join(OUT, "draw.json"), JSON.stringify(drawn, null, 2));
+    missing.length
+      ? missing.map((d) => `${d.kind} ${d.px}px`).join(", ")
+      : `${drawn.length} kinds, quietest ${Math.min(...drawn.map((d) => d.px))} px vs ${threshold} px floor`);
+  writeFileSync(join(OUT, "draw.json"), JSON.stringify({ floor, threshold, drawn }, null, 2));
+}
+
+/**
+ * A signature taken only once the view has actually stopped moving.
+ *
+ * The orbit controls ease, so a signature captured right after a camera move
+ * is of a frame the camera has since left. Every later comparison then differs
+ * by a constant tens of thousands of pixels — and a threshold test reads that
+ * as "everything drew". A check that can report green while measuring nothing
+ * is worse than no check, so the baseline is taken only when two consecutive
+ * settled reads agree.
+ */
+async function stableSignature(page, tries = 8) {
+  let prev = null;
+  for (let i = 0; i < tries; i++) {
+    await settle(page);
+    const now = await signature(page);
+    if (prev && changedPixels(prev, now) === 0) return now;
+    prev = now;
+    await page.waitForTimeout(900);
+  }
+  return null;
 }
 
 /** Point a feature at a given wall, if it is attached to one at all. */
