@@ -67,12 +67,16 @@ def main():
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
+    print("reading the snapshot. The cost file is large, so give this a minute.")
     con = duckdb.connect()
 
     for view, needle in (("cl", "HistoricalCostData"),
                          ("est", "EstimateSummary"),
                          ("prop", "EstimatePropertyData")):
-        path = find(args.snapshot, needle).replace("'", "''")
+        # Forward slashes and doubled quotes: a Windows path goes into a SQL
+        # string literal here, and C:\Users\... with an apostrophe in it is a
+        # perfectly normal thing for a folder to be called.
+        path = find(args.snapshot, needle).replace("\\", "/").replace("'", "''")
         con.execute(
             f"CREATE VIEW {view} AS SELECT * FROM "
             f"read_csv_auto('{path}', header=true, sample_size=-1, all_varchar=false)"
