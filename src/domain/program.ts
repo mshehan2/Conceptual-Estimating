@@ -1,0 +1,239 @@
+/**
+ * Program, capacity, and circulation.
+ *
+ * Turns a mass's unit counts into net area, capacity, and the core it needs —
+ * then checks whether the box the user drew can actually hold it. This is the
+ * feedback loop that makes massing iteration honest: change the footprint and
+ * the program either fits or it doesn't.
+ */
+
+import { COUNTABLE_CATEGORIES, UNIT_BY_REF, unitArea, type UnitDef } from "@/markets/unitCatalog";
+import { TYPE_BY_ID } from "@/markets/registry";
+import { grossArea, type Mass } from "./massing";
+
+export interface CirculationSettings {
+  /** Area per egress stair, per floor. */
+  stairSF: number;
+  /** Area per elevator shaft, per floor. */
+  elevSF: number;
+  unitsPerElevator: number;
+  sfPerElevator: number;
+}
+
+export const DEFAULT_CIRCULATION: CirculationSettings = {
+  stairSF: 220,
+  elevSF: 90,
+  unitsPerElevator: 60,
+  sfPerElevator: 45_000,
+};
+
+export interface CirculationResult {
+  stairs: number;
+  elevators: number;
+  /** Total core area across all floors. */
+  coreSF: number;
+  /** True when the counts came from the code rules rather than an override. */
+  auto: { stairs: boolean; elevators: boolean };
+}
+
+/** Stair and elevator counts from travel distance, unit count, and area. */
+export function circulation(m: Mass, cs: CirculationSettings = DEFAULT_CIRCULATION): CirculationResult {
+  const type = TYPE_BY_ID[m.typeId];
+  const travelLimit = m.travel ?? type?.defaults.travelDistance ?? 250;
+  const longest = Math.max(m.w, m.d);
+  const autoStairs = Math.max(2, Math.ceil(longest / travelLimit));
+
+  const units = totalUnits(m);
+  const gsf = grossArea(m);
+  const autoElevators =
+    m.floors <= 1
+      ? 0
+      : Math.max(1, Math.ceil(Math.max(units / cs.unitsPerElevator, gsf / cs.sfPerElevator)));
+
+  const stairs = Math.max(0, Math.round(m.stairOverride ?? autoStairs));
+  const elevators = Math.max(0, Math.round(m.elevOverride ?? autoElevators));
+
+  return {
+    stairs,
+    elevators,
+    coreSF: (stairs * cs.stairSF + elevators * cs.elevSF) * m.floors,
+    auto: { stairs: m.stairOverride == null, elevators: m.elevOverride == null },
+  };
+}
+
+export const totalUnits = (m: Mass): number =>
+  Object.entries(m.program).reduce((a, [ref, n]) => {
+    const u = UNIT_BY_REF[ref];
+    return u && COUNTABLE_CATEGORIES.has(u.category) ? a + (n || 0) : a;
+  }, 0);
+
+export const totalBeds = (m: Mass): number =>
+  Object.entries(m.program).reduce((a, [ref, n]) => {
+    const u = UNIT_BY_REF[ref];
+    return u ? a + (n || 0) * (u.beds ?? 0) : a;
+  }, 0);
+
+/** Net program area across every entry, counted or not. */
+export const netProgramArea = (m: Mass): number =>
+  Object.entries(m.program).reduce((a, [ref, n]) => {
+    const u = UNIT_BY_REF[ref];
+    return u ? a + (n || 0) * unitArea(u) : a;
+  }, 0);
+
+/** Net-to-gross multiplier in effect for a mass. */
+export function grossingFactor(m: Mass): number {
+  const fromType = TYPE_BY_ID[m.typeId]?.defaults.grossing;
+  return Math.max(1, m.grossing ?? fromType ?? 1.35);
+}
+
+export interface CapacityResult {
+  netProgram: number;
+  grossedProgram: number;
+  coreSF: number;
+  /** Gross area the program requires. */
+  required: number;
+  /** Gross area the drawn box provides. */
+  available: number;
+  /** Required as a percentage of available. */
+  pct: number;
+  over: boolean;
+  /** Net program / gross area — the efficiency actually achieved. */
+  efficiency: number;
+}
+
+export function capacity(m: Mass, cs: CirculationSettings = DEFAULT_CIRCULATION): CapacityResult {
+  const netProgram = netProgramArea(m);
+  const grossedProgram = netProgram * grossingFactor(m);
+  const coreSF = circulation(m, cs).coreSF;
+  const required = grossedProgram + coreSF;
+  const available = grossArea(m);
+  return {
+    netProgram,
+    grossedProgram,
+    coreSF,
+    required,
+    available,
+    pct: available > 0 ? (required / available) * 100 : 0,
+    over: required > available + 0.5,
+    efficiency: available > 0 ? netProgram / available : 0,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Seeding a program from a capacity target
+// ---------------------------------------------------------------------------
+
+export interface SeededProgram {
+  program: Record<string, number>;
+  /** Support space added off the type's ratios, ref -> count. */
+  support: Record<string, number>;
+  netArea: number;
+  capacityUnits: number;
+}
+
+/**
+ * Build a program from a capacity target.
+ *
+ * `target` is read in the type's own capacity unit: 200 apartments, 120 keys,
+ * 90 beds — or, for types measured in area (an MOB, a warehouse), 40,000 net
+ * square feet. Getting that reading right matters: treating an SF target as a
+ * count would seed forty 25,000 SF high-bay floors.
+ *
+ * Counts are distributed across the type's default mix by largest remainder so
+ * they are whole numbers that still sum to exactly the target, then support
+ * space is layered on, scaled off the same capacity.
+ */
+export function seedProgramForType(typeId: string, target: number): SeededProgram {
+  const type = TYPE_BY_ID[typeId];
+  const program: Record<string, number> = {};
+  const support: Record<string, number> = {};
+  if (!type || target <= 0) return { program, support, netArea: 0, capacityUnits: 0 };
+
+  // Area- and density-measured types: the target describes floor area or
+  // occupancy, so mix shares are shares of NET AREA rather than counts.
+  const DENSITY_UOMS = new Set(["SF", "STUDENT", "SEAT"]);
+  if (DENSITY_UOMS.has(type.capacityUom)) {
+    const netTarget =
+      type.capacityUom === "SF"
+        ? target
+        : target * (type.gsfPerCapacity ?? 200) * type.efficiency.typical;
+    for (const m of type.programMix) {
+      const unit = UNIT_BY_REF[m.unitRef];
+      if (!unit) continue;
+      const count = Math.max(1, Math.round((m.share * netTarget) / unitArea(unit)));
+      program[m.unitRef] = (program[m.unitRef] ?? 0) + count;
+    }
+    for (const sp of type.supportSpaces ?? []) {
+      const unit = UNIT_BY_REF[sp.unitRef];
+      if (!unit) continue;
+      const count = Math.max(1, Math.round((sp.sfPerCapacity * target) / unitArea(unit)));
+      support[sp.unitRef] = count;
+      program[sp.unitRef] = (program[sp.unitRef] ?? 0) + count;
+    }
+    const netArea = Object.entries(program).reduce((a, [ref, n]) => {
+      const u = UNIT_BY_REF[ref];
+      return u ? a + n * unitArea(u) : a;
+    }, 0);
+    return { program, support, netArea, capacityUnits: 0 };
+  }
+
+  const targetCapacity = target;
+  // Largest remainder: floor everything, then hand out what's left by remainder.
+  const raw = type.programMix.map((m) => ({ ref: m.unitRef, exact: m.share * targetCapacity }));
+  const floored = raw.map((r) => ({ ...r, n: Math.floor(r.exact), rem: r.exact - Math.floor(r.exact) }));
+  let remaining = Math.round(targetCapacity) - floored.reduce((a, r) => a + r.n, 0);
+  floored.sort((a, b) => b.rem - a.rem);
+  for (let i = 0; remaining > 0 && floored.length; i++, remaining--) {
+    floored[i % floored.length].n += 1;
+  }
+  for (const r of floored) if (r.n > 0) program[r.ref] = r.n;
+
+  // Support space: SF per capacity unit, converted to whole rooms of that type.
+  for (const s of type.supportSpaces ?? []) {
+    const unit = UNIT_BY_REF[s.unitRef];
+    if (!unit) continue;
+    const targetSF = s.sfPerCapacity * targetCapacity;
+    const count = Math.max(1, Math.round(targetSF / unitArea(unit)));
+    support[s.unitRef] = count;
+    program[s.unitRef] = (program[s.unitRef] ?? 0) + count;
+  }
+
+  const netArea = Object.entries(program).reduce((a, [ref, n]) => {
+    const u = UNIT_BY_REF[ref];
+    return u ? a + n * unitArea(u) : a;
+  }, 0);
+
+  const capacityUnits = Object.entries(program).reduce((a, [ref, n]) => {
+    const u = UNIT_BY_REF[ref];
+    return u && COUNTABLE_CATEGORIES.has(u.category) ? a + n : a;
+  }, 0);
+
+  return { program, support, netArea, capacityUnits };
+}
+
+/** Footprint that would hold a program at a given floor count. */
+export function fitFootprint(
+  netArea: number,
+  typeId: string,
+  floors: number,
+  aspect = 2.6,
+): { w: number; d: number } {
+  const type = TYPE_BY_ID[typeId];
+  const grossing = type?.defaults.grossing ?? 1.35;
+  const perFloor = Math.max(400, (netArea * grossing) / Math.max(1, floors));
+  // Hold a plausible bar depth for the type rather than drifting to a square.
+  const targetDepth = type?.defaults.footprint.d ?? 66;
+  const w = perFloor / targetDepth;
+  if (w / targetDepth > aspect * 1.8) {
+    // Too long and thin to be one bar — square it up a little.
+    const d = Math.sqrt(perFloor / aspect);
+    return { w: Math.round(perFloor / d), d: Math.round(d) };
+  }
+  return { w: Math.round(w), d: Math.round(targetDepth) };
+}
+
+/** Every unit ref present in a program, resolved. */
+export const programUnits = (program: Record<string, number>): { unit: UnitDef; count: number }[] =>
+  Object.entries(program)
+    .map(([ref, count]) => ({ unit: UNIT_BY_REF[ref], count }))
+    .filter((r): r is { unit: UnitDef; count: number } => Boolean(r.unit) && r.count > 0);

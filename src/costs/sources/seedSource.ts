@@ -18,6 +18,8 @@ import type {
 import { SEED_CONCEPTUAL, SEED_PRICED_AT } from "../seed/conceptual";
 import { SEED_UNIT_COSTS } from "../seed/unitCosts";
 import { cityIndex, nearestCity } from "../seed/locations";
+import { allowancesFor, profileFor } from "../seed/typeProfiles";
+import { TYPE_BY_ID } from "@/markets/registry";
 
 /** National-average escalation assumption when the source has nothing better. */
 const DEFAULT_ESCALATION_PCT = 4;
@@ -52,11 +54,60 @@ export class SeedCostSource extends BaseCostSource {
 
   override async unitCosts(query: UnitCostQuery): Promise<UnitCostLine[]> {
     const wanted = query.keys ? new Set(query.keys) : null;
-    return SEED_UNIT_COSTS.filter((r) => {
+    const base = SEED_UNIT_COSTS.filter((r) => {
       if (wanted && !wanted.has(r.key)) return false;
       if (query.marketId && r.marketId && r.marketId !== query.marketId) return false;
       if (query.typeId && r.typeId && r.typeId !== query.typeId) return false;
       return true;
+    });
+
+    // A generic $/GSF HVAC rate is right for an apartment and wrong for an
+    // operating room. When the query names a building type, apply that type's
+    // cost profile so the rate served is genuinely type-specific.
+    if (!query.typeId) return base;
+    const type = TYPE_BY_ID[query.typeId];
+    if (!type) return base;
+    const profile = profileFor(type.defaults.costProfile);
+    const mults = profile.multipliers;
+    const allowances = allowancesFor(profile);
+
+    return base.map((r) => {
+      // Allowances are set outright by the profile rather than scaled, so a
+      // type that carries no medical gas reads 0 instead of a scaled default.
+      const allowance = allowances[r.key];
+      if (allowance != null) {
+        return {
+          ...r,
+          id: `${r.id}:${type.id}`,
+          typeId: type.id,
+          marketId: type.marketId,
+          low: allowance * 0.75,
+          likely: allowance,
+          high: allowance * 1.35,
+          provenance: {
+            ...r.provenance,
+            derived: true,
+            note: `${profile.label} allowance — ${profile.rationale}`,
+          },
+        };
+      }
+
+      const f = mults[r.key];
+      if (f == null || f === 1) return r;
+      return {
+        ...r,
+        id: `${r.id}:${type.id}`,
+        typeId: type.id,
+        marketId: type.marketId,
+        low: r.low * f,
+        likely: r.likely * f,
+        high: r.high * f,
+        provenance: {
+          ...r.provenance,
+          derived: true,
+          note: `x${f} for ${profile.label} — ${profile.rationale}`,
+        },
+      };
     });
   }
 

@@ -22,7 +22,9 @@ export type SkinKey =
   | "curtain_wall"
   | "eifs"
   | "wood"
-  | "stone";
+  | "stone"
+  | "tilt_up"
+  | "insulated_panel";
 
 export type RoofKind = "flat" | "gable" | "hip";
 
@@ -35,8 +37,22 @@ export type StructureSystem =
   | "tilt_up"
   | "podium"; // Type III over Type I
 
+/**
+ * How much of a building a type's scope covers.
+ *   full       — substructure through finishes
+ *   shell      — structure, envelope, core; no tenant fit-out
+ *   interiors  — fit-out inside someone else's shell
+ *   structure  — a frame with no interior program (parking decks)
+ *   site       — no building at all; paving and site improvements only
+ */
+export type ScopeMode = "full" | "shell" | "interiors" | "structure" | "site";
+
 /** Planning defaults a building type seeds into a new scheme. */
 export interface TypeDefaults {
+  /** Defaults to "full" when omitted. */
+  scopeMode?: ScopeMode;
+  /** Cost profile id applied to rates for this type. Defaults by structure. */
+  costProfile?: string;
   floors: number;
   /** Floor-to-floor height, feet. */
   floorToFloor: number;
@@ -58,6 +74,8 @@ export interface TypeDefaults {
   parkingRatio?: number;
   /** True when the type is normally sprinklered/high-rise-rated. */
   highRise?: boolean;
+  /** True when the type is normally built below grade (excavation, shoring). */
+  belowGrade?: boolean;
 }
 
 /** Observed net-to-gross efficiency band for a type, as fractions 0..1. */
@@ -101,6 +119,12 @@ export interface BuildingTypeDef {
   programMix: ProgramMixEntry[];
   /** Amenity/support program scaled off capacity. */
   supportSpaces?: SupportSpaceEntry[];
+  /**
+   * Gross SF per capacity unit. Required for density-measured types (students,
+   * seats) where the capacity target describes occupancy rather than a count of
+   * rooms — 900 students is 900 x 165 GSF, not 900 classrooms.
+   */
+  gsfPerCapacity?: number;
   /** Typical project size range in capacity units, for sanity checks. */
   typicalCapacity?: { low: number; high: number };
   tags?: string[];

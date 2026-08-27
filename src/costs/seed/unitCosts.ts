@@ -47,6 +47,8 @@ const ROWS: Row[] = [
   ["wall_stucco", "Stucco assembly", "SF", 35, 45, 60, "09 24 00", "B2010"],
   ["wall_eifs", "EIFS assembly", "SF", 30, 38, 52, "07 24 00", "B2010"],
   ["wall_precast", "Architectural precast", "SF", 50, 62, 84, "03 45 00", "B2010"],
+  ["wall_tilt_up", "Site-cast tilt-up panel", "SF", 24, 32, 44, "03 47 00", "B2010"],
+  ["wall_insulated_panel", "Insulated metal panel", "SF", 32, 42, 58, "07 42 13", "B2010"],
   ["wall_stone", "Stone veneer assembly", "SF", 68, 88, 120, "04 43 00", "B2010"],
   ["wall_wood", "Wood siding assembly", "SF", 36, 46, 62, "07 46 00", "B2010"],
   ["wall_curtain_wall", "Opaque curtain wall spandrel", "SF", 78, 96, 128, "08 44 00", "B2010"],
@@ -126,7 +128,33 @@ const ROWS: Row[] = [
   ["fitout_warehouse", "Warehouse / high-bay fit-out", "SF", 6, 9, 14, "09 00 00", "C3000"],
   ["fitout_freezer", "Freezer envelope & refrigeration", "SF", 105, 142, 190, "13 21 00", "C3000"],
   ["fitout_cooler", "Cooler envelope & refrigeration", "SF", 72, 98, 132, "13 21 00", "C3000"],
+
+  // ---- $/GSF allowances ----
+  // Scope a conceptual benchmark includes but a geometric takeoff cannot see.
+  // The base values here are the generic case; each building type's cost
+  // profile overrides them (see typeProfiles.ts), which is what makes medical
+  // gas appear in a hospital and vanish from a warehouse.
+  ["allow_ffe", "FF&E allowance", "GSF", 5, 7, 10, "12 00 00", "E2010"],
+  ["allow_lowvoltage", "Low voltage, security & AV", "GSF", 4, 5.5, 8, "27 00 00", "D5030"],
+  ["allow_specialties", "Specialties", "GSF", 1.8, 2.5, 3.6, "10 00 00", "C1090"],
+  ["allow_signage", "Signage & wayfinding", "GSF", 0.7, 1, 1.5, "10 14 00", "C1090"],
+  ["allow_millwork", "Common-area millwork", "GSF", 1.4, 2, 3, "06 40 00", "C1030"],
+  ["allow_equipment", "Fixed & specialty equipment", "GSF", 0, 0, 0, "11 00 00", "E1010"],
+  ["allow_medgas", "Medical gas systems", "GSF", 0, 0, 0, "22 62 00", "D2030"],
+  ["allow_demo", "Demolition & abatement", "GSF", 0, 0, 0, "02 41 00", "B1010"],
 ];
+
+/** Allowance keys, which the takeoff measures against gross floor area. */
+export const ALLOWANCE_KEYS = [
+  "allow_ffe",
+  "allow_lowvoltage",
+  "allow_specialties",
+  "allow_signage",
+  "allow_millwork",
+  "allow_equipment",
+  "allow_medgas",
+  "allow_demo",
+] as const;
 
 const BASIS =
   "Seed planning range from published industry cost guidance. Not DESTINI data — connect a DESTINI source to supersede.";

@@ -170,7 +170,14 @@ export const UNIT_CATALOG: UnitDef[] = [
   { ref: "amen_ballroom", label: "Ballroom / Banquet", category: "Amenity/Support", mode: "area", area: 6000, beds: 0, costKey: "fitout_assembly", fullDepth: true },
 
   // --- Parking ---
-  { ref: "pk_stall", label: "Parking Stall", category: "Parking", mode: "fixed", area: 340, w: 9, d: 18, beds: 0, costKey: "parking_stall", capacityUom: "STALL", notes: "Includes drive aisle share; 340 GSF/stall is the structured-deck planning figure." },
+  {
+    ref: "pk_stall", label: "Parking Stall", category: "Parking",
+    // Area mode, not fixed: a stall's planning area is the stripe PLUS its
+    // share of drive aisle and ramp. w/d stay the stall stripe for drawing.
+    mode: "area", area: 340, w: 9, d: 18, beds: 0,
+    costKey: "parking_stall", capacityUom: "STALL",
+    notes: "340 SF/stall includes the drive aisle and ramp share; the 9x18 dimension is the stripe itself.",
+  },
 ];
 
 export const UNIT_BY_REF: Record<string, UnitDef> = Object.fromEntries(

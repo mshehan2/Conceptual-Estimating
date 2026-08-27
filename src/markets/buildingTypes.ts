@@ -18,6 +18,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "apartments",
     defaults: {
+      costProfile: "senior_independent",
       floors: 4, floorToFloor: 10.5, footprint: { w: 200, d: 68 }, grossing: 1.35,
       glazing: "punched", glazingCoverage: 34, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 250, bay: { w: 26, d: 30 }, parkingRatio: 1.1,
@@ -50,6 +51,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "suites",
     defaults: {
+      costProfile: "senior_licensed",
       floors: 3, floorToFloor: 10, footprint: { w: 175, d: 66 }, grossing: 1.45,
       glazing: "punched", glazingCoverage: 30, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 200, bay: { w: 22, d: 28 }, parkingRatio: 0.5,
@@ -79,6 +81,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "rooms",
     defaults: {
+      costProfile: "senior_licensed",
       floors: 1, floorToFloor: 11, footprint: { w: 150, d: 90 }, grossing: 1.55,
       glazing: "punched", glazingCoverage: 26, skin: "fiber_cement", roof: "gable",
       structure: "wood_frame", travelDistance: 200, parkingRatio: 0.4,
@@ -106,6 +109,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "BED",
     capacityLabel: "beds",
     defaults: {
+      costProfile: "skilled_nursing",
       floors: 2, floorToFloor: 12, footprint: { w: 190, d: 80 }, grossing: 1.6,
       glazing: "punched", glazingCoverage: 28, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 200, parkingRatio: 0.45,
@@ -134,6 +138,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "units",
     defaults: {
+      costProfile: "senior_licensed",
       floors: 4, floorToFloor: 10.5, footprint: { w: 210, d: 70 }, grossing: 1.42,
       glazing: "punched", glazingCoverage: 32, skin: "brick", roof: "flat",
       structure: "podium", travelDistance: 250, parkingRatio: 0.9,
@@ -167,6 +172,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "apartments",
     defaults: {
+      costProfile: "wood_residential",
       floors: 4, floorToFloor: 9.5, footprint: { w: 180, d: 62 }, grossing: 1.28,
       glazing: "punched", glazingCoverage: 26, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 250, parkingRatio: 0.7,
@@ -196,6 +202,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "healthcare_mob",
       floors: 3, floorToFloor: 14, footprint: { w: 160, d: 90 }, grossing: 1.42,
       glazing: "strip", glazingCoverage: 55, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250, bay: { w: 30, d: 30 }, parkingRatio: 0,
@@ -220,6 +227,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "EA",
     capacityLabel: "operating rooms",
     defaults: {
+      costProfile: "healthcare_acute",
       floors: 1, floorToFloor: 16, footprint: { w: 150, d: 110 }, grossing: 1.65,
       glazing: "punched", glazingCoverage: 24, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 200, parkingRatio: 0,
@@ -246,6 +254,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "EA",
     capacityLabel: "exam rooms",
     defaults: {
+      costProfile: "healthcare_outpatient",
       floors: 1, floorToFloor: 13, footprint: { w: 130, d: 80 }, grossing: 1.4,
       glazing: "strip", glazingCoverage: 45, skin: "fiber_cement", roof: "flat",
       structure: "light_gauge", travelDistance: 250, parkingRatio: 0,
@@ -269,6 +278,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "BED",
     capacityLabel: "beds",
     defaults: {
+      costProfile: "healthcare_acute",
       floors: 6, floorToFloor: 15, footprint: { w: 200, d: 96 }, grossing: 1.85,
       glazing: "strip", glazingCoverage: 48, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 200, bay: { w: 30, d: 32 }, highRise: true,
@@ -292,6 +302,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "EA",
     capacityLabel: "treatment bays",
     defaults: {
+      costProfile: "healthcare_acute",
       floors: 1, floorToFloor: 16, footprint: { w: 170, d: 120 }, grossing: 1.8,
       glazing: "punched", glazingCoverage: 22, skin: "precast", roof: "flat",
       structure: "steel", travelDistance: 200,
@@ -314,6 +325,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "EA",
     capacityLabel: "modalities",
     defaults: {
+      costProfile: "healthcare_outpatient",
       floors: 1, floorToFloor: 15, footprint: { w: 120, d: 80 }, grossing: 1.55,
       glazing: "punched", glazingCoverage: 20, skin: "fiber_cement", roof: "flat",
       structure: "steel", travelDistance: 250,
@@ -336,6 +348,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "BED",
     capacityLabel: "beds",
     defaults: {
+      costProfile: "healthcare_inpatient",
       floors: 2, floorToFloor: 13, footprint: { w: 180, d: 84 }, grossing: 1.65,
       glazing: "punched", glazingCoverage: 22, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 200,
@@ -360,6 +373,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "BED",
     capacityLabel: "beds",
     defaults: {
+      costProfile: "concrete_residential",
       floors: 5, floorToFloor: 10, footprint: { w: 190, d: 62 }, grossing: 1.42,
       glazing: "punched", glazingCoverage: 30, skin: "brick", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.2,
@@ -387,6 +401,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "academic",
       floors: 3, floorToFloor: 14, footprint: { w: 170, d: 95 }, grossing: 1.5,
       glazing: "strip", glazingCoverage: 52, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250, bay: { w: 30, d: 30 },
@@ -411,6 +426,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "lab",
       floors: 3, floorToFloor: 16, footprint: { w: 160, d: 100 }, grossing: 1.6,
       glazing: "strip", glazingCoverage: 45, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 200, bay: { w: 32, d: 32 },
@@ -435,6 +451,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "assembly_longspan",
       floors: 2, floorToFloor: 16, footprint: { w: 180, d: 120 }, grossing: 1.45,
       glazing: "full", glazingCoverage: 62, skin: "curtain_wall", roof: "flat",
       structure: "steel", travelDistance: 250,
@@ -459,6 +476,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "assembly_longspan",
       floors: 2, floorToFloor: 22, footprint: { w: 220, d: 140 }, grossing: 1.3,
       glazing: "strip", glazingCoverage: 35, skin: "metal_panel", roof: "flat",
       structure: "steel", travelDistance: 400,
@@ -483,6 +501,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "academic",
       floors: 3, floorToFloor: 14, footprint: { w: 165, d: 110 }, grossing: 1.35,
       glazing: "full", glazingCoverage: 58, skin: "curtain_wall", roof: "flat",
       structure: "concrete", travelDistance: 250,
@@ -508,6 +527,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "apartments",
     defaults: {
+      costProfile: "wood_residential_walkup",
       floors: 3, floorToFloor: 9.5, footprint: { w: 190, d: 60 }, grossing: 1.22,
       glazing: "punched", glazingCoverage: 24, skin: "fiber_cement", roof: "gable",
       structure: "wood_frame", travelDistance: 250, parkingRatio: 1.6,
@@ -532,6 +552,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "apartments",
     defaults: {
+      costProfile: "wood_residential",
       floors: 5, floorToFloor: 10, footprint: { w: 260, d: 66 }, grossing: 1.28,
       glazing: "punched", glazingCoverage: 28, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 250, parkingRatio: 1.3,
@@ -560,6 +581,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "apartments",
     defaults: {
+      costProfile: "podium_residential",
       floors: 6, floorToFloor: 10, footprint: { w: 230, d: 72 }, grossing: 1.3,
       glazing: "punched", glazingCoverage: 32, skin: "fiber_cement", roof: "flat",
       structure: "podium", travelDistance: 250, parkingRatio: 1.0,
@@ -588,6 +610,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "apartments",
     defaults: {
+      costProfile: "concrete_highrise",
       floors: 18, floorToFloor: 10.5, footprint: { w: 120, d: 80 }, grossing: 1.38,
       glazing: "full", glazingCoverage: 70, skin: "curtain_wall", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.8, highRise: true,
@@ -617,6 +640,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "apartments",
     defaults: {
+      costProfile: "wood_residential",
       floors: 4, floorToFloor: 9.5, footprint: { w: 190, d: 62 }, grossing: 1.24,
       glazing: "punched", glazingCoverage: 24, skin: "fiber_cement", roof: "flat",
       structure: "wood_frame", travelDistance: 250, parkingRatio: 1.1,
@@ -641,6 +665,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "UNIT",
     capacityLabel: "homes",
     defaults: {
+      costProfile: "wood_residential_walkup",
       floors: 3, floorToFloor: 9.5, footprint: { w: 176, d: 34 }, grossing: 1.1,
       glazing: "punched", glazingCoverage: 26, skin: "brick", roof: "gable",
       structure: "wood_frame", travelDistance: 250, parkingRatio: 2.0,
@@ -662,6 +687,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "KEY",
     capacityLabel: "keys",
     defaults: {
+      costProfile: "light_gauge_hospitality",
       floors: 5, floorToFloor: 9.5, footprint: { w: 190, d: 62 }, grossing: 1.35,
       glazing: "punched", glazingCoverage: 30, skin: "fiber_cement", roof: "flat",
       structure: "light_gauge", travelDistance: 250, parkingRatio: 1.0,
@@ -689,6 +715,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "KEY",
     capacityLabel: "keys",
     defaults: {
+      costProfile: "light_gauge_hospitality",
       floors: 4, floorToFloor: 9.5, footprint: { w: 185, d: 64 }, grossing: 1.32,
       glazing: "punched", glazingCoverage: 28, skin: "fiber_cement", roof: "flat",
       structure: "light_gauge", travelDistance: 250, parkingRatio: 1.0,
@@ -711,6 +738,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "KEY",
     capacityLabel: "keys",
     defaults: {
+      costProfile: "concrete_hospitality",
       floors: 8, floorToFloor: 10, footprint: { w: 180, d: 80 }, grossing: 1.5,
       glazing: "strip", glazingCoverage: 48, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.8, highRise: true,
@@ -740,6 +768,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "KEY",
     capacityLabel: "keys",
     defaults: {
+      costProfile: "concrete_hospitality",
       floors: 6, floorToFloor: 11, footprint: { w: 130, d: 70 }, grossing: 1.45,
       glazing: "strip", glazingCoverage: 52, skin: "brick", roof: "flat",
       structure: "concrete", travelDistance: 250, parkingRatio: 0.4,
@@ -768,6 +797,8 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      scopeMode: "shell",
+      costProfile: "office_shell",
       floors: 4, floorToFloor: 14, footprint: { w: 180, d: 110 }, grossing: 1.15,
       glazing: "full", glazingCoverage: 68, skin: "curtain_wall", roof: "flat",
       structure: "steel", travelDistance: 300, bay: { w: 30, d: 40 },
@@ -787,6 +818,8 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      scopeMode: "interiors",
+      costProfile: "office_fitout",
       floors: 1, floorToFloor: 14, footprint: { w: 150, d: 90 }, grossing: 1.0,
       glazing: "none", glazingCoverage: 0, skin: "fiber_cement", roof: "flat",
       structure: "steel", travelDistance: 300,
@@ -810,6 +843,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "flex",
       floors: 1, floorToFloor: 18, footprint: { w: 200, d: 130 }, grossing: 1.15,
       glazing: "strip", glazingCoverage: 32, skin: "metal_panel", roof: "flat",
       structure: "steel", travelDistance: 300, bay: { w: 40, d: 40 },
@@ -835,8 +869,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "warehouse",
       floors: 1, floorToFloor: 36, footprint: { w: 500, d: 300 }, grossing: 1.04,
-      glazing: "strip", glazingCoverage: 8, skin: "precast", roof: "flat",
+      glazing: "strip", glazingCoverage: 8, skin: "tilt_up", roof: "flat",
       structure: "tilt_up", travelDistance: 400, bay: { w: 50, d: 50 },
     },
     efficiency: { low: 0.92, typical: 0.95, high: 0.97 },
@@ -857,6 +892,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "manufacturing",
       floors: 1, floorToFloor: 28, footprint: { w: 320, d: 220 }, grossing: 1.08,
       glazing: "strip", glazingCoverage: 14, skin: "metal_panel", roof: "flat",
       structure: "steel", travelDistance: 400, bay: { w: 40, d: 40 },
@@ -879,8 +915,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "cold_storage",
       floors: 1, floorToFloor: 40, footprint: { w: 380, d: 260 }, grossing: 1.06,
-      glazing: "none", glazingCoverage: 0, skin: "metal_panel", roof: "flat",
+      glazing: "none", glazingCoverage: 0, skin: "insulated_panel", roof: "flat",
       structure: "tilt_up", travelDistance: 400, bay: { w: 50, d: 50 },
     },
     efficiency: { low: 0.9, typical: 0.94, high: 0.96 },
@@ -904,6 +941,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "STUDENT",
     capacityLabel: "students",
     defaults: {
+      costProfile: "academic",
       floors: 2, floorToFloor: 14, footprint: { w: 240, d: 130 }, grossing: 1.5,
       glazing: "strip", glazingCoverage: 42, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250, parkingRatio: 0.2,
@@ -916,6 +954,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       { unitRef: "amen_study", share: 0.14 },
       { unitRef: "edu_seminar", share: 0.12 },
     ],
+    gsfPerCapacity: 165,
     supportSpaces: [
       { unitRef: "amen_dining", sfPerCapacity: 9 },
       { unitRef: "ath_court", sfPerCapacity: 7 },
@@ -932,6 +971,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SEAT",
     capacityLabel: "seats",
     defaults: {
+      costProfile: "assembly_longspan",
       floors: 1, floorToFloor: 20, footprint: { w: 160, d: 120 }, grossing: 1.4,
       glazing: "punched", glazingCoverage: 22, skin: "brick", roof: "gable",
       structure: "steel", travelDistance: 250, parkingRatio: 0.3,
@@ -943,6 +983,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       { unitRef: "amen_activity", share: 0.25 },
       { unitRef: "edu_classroom", share: 0.2 },
     ],
+    gsfPerCapacity: 28,
     typicalCapacity: { low: 200, high: 2000 },
     tags: ["assembly", "long-span"],
   },
@@ -955,6 +996,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "civic_essential",
       floors: 2, floorToFloor: 15, footprint: { w: 150, d: 100 }, grossing: 1.45,
       glazing: "punched", glazingCoverage: 30, skin: "brick", roof: "flat",
       structure: "steel", travelDistance: 250,
@@ -979,6 +1021,7 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "SF",
     capacityLabel: "square feet",
     defaults: {
+      costProfile: "assembly_longspan",
       floors: 1, floorToFloor: 22, footprint: { w: 200, d: 140 }, grossing: 1.32,
       glazing: "strip", glazingCoverage: 38, skin: "metal_panel", roof: "flat",
       structure: "steel", travelDistance: 400,
@@ -1005,6 +1048,8 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "STALL",
     capacityLabel: "stalls",
     defaults: {
+      scopeMode: "structure",
+      costProfile: "parking_structure",
       floors: 5, floorToFloor: 10.5, footprint: { w: 190, d: 122 }, grossing: 1.0,
       glazing: "none", glazingCoverage: 0, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 400,
@@ -1024,6 +1069,9 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "STALL",
     capacityLabel: "stalls",
     defaults: {
+      scopeMode: "structure",
+      costProfile: "parking_below",
+      belowGrade: true,
       floors: 2, floorToFloor: 11, footprint: { w: 180, d: 120 }, grossing: 1.0,
       glazing: "none", glazingCoverage: 0, skin: "precast", roof: "flat",
       structure: "concrete", travelDistance: 400,
@@ -1043,6 +1091,8 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
     capacityUom: "STALL",
     capacityLabel: "stalls",
     defaults: {
+      scopeMode: "site",
+      costProfile: "parking_surface",
       floors: 1, floorToFloor: 0, footprint: { w: 300, d: 200 }, grossing: 1.0,
       glazing: "none", glazingCoverage: 0, skin: "precast", roof: "flat",
       structure: "steel", travelDistance: 400,
