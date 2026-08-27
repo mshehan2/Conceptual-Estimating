@@ -28,6 +28,7 @@ import { seedProgramForType, fitFootprint } from "@/domain/program";
 import { makeMassForType } from "@/domain/massing";
 import { TYPE_BY_ID, typesForMarket } from "@/markets/registry";
 import { nearestCity, cityIndex } from "@/costs/seed/locations";
+import type { FootprintShape, Point } from "@/domain/footprint";
 import { overrideSource, resolver } from "./costSources";
 import type { Uom } from "@/costs/schema";
 
@@ -64,6 +65,20 @@ export interface ProjectState {
 
   // --- masses ---
   patchMass: (schemeId: string, massId: string, patch: Partial<Mass>) => void;
+  /**
+   * Change a mass's plan shape, keeping its bounding box in step.
+   *
+   * Width and depth are the size half of a footprint and the shape is the rest,
+   * so a hand-drawn polygon that no longer matches its stated bounds would put
+   * every downstream consumer — area, envelope, camera framing — slightly out.
+   */
+  /**
+   * @param recenter Re-derive the bounding box and re-centre the points.
+   *   Must be false during a drag: recentring moves every point under the
+   *   cursor mid-gesture, so the offset captured on pointer-down no longer
+   *   matches the vertex and it runs away from the pointer.
+   */
+  setMassShape: (schemeId: string, massId: string, shape: FootprintShape, recenter?: boolean) => void;
   addMass: (schemeId: string, typeId?: string) => void;
   removeMass: (schemeId: string, massId: string) => void;
 
@@ -76,6 +91,21 @@ export interface ProjectState {
 }
 
 const stamp = () => new Date().toISOString();
+
+/** Bounding box of a drawn ring, in feet. */
+function pointsBounds(points: Point[]) {
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minZ = Infinity;
+  let maxZ = -Infinity;
+  for (const [x, z] of points) {
+    minX = Math.min(minX, x);
+    maxX = Math.max(maxX, x);
+    minZ = Math.min(minZ, z);
+    maxZ = Math.max(maxZ, z);
+  }
+  return { minX, maxX, minZ, maxZ };
+}
 
 /** Persisted shape. Estimates are derived, so only the project is written. */
 function persist(project: Project) {
@@ -286,6 +316,36 @@ export const useProject = create<ProjectState>((set, get) => {
       ),
 
     patchScheme: (id, patch) => commit(mapScheme(id, (s) => ({ ...s, ...patch }))),
+
+    setMassShape: (schemeId, massId, shape, recenter = true) =>
+      commit(
+        mapScheme(schemeId, (s) => ({
+          ...s,
+          masses: s.masses.map((m) => {
+            if (m.id !== massId) return m;
+            if (shape.kind !== "polygon") return { ...m, shape };
+            // Mid-drag: take the points as given and leave the frame alone.
+            if (!recenter) return { ...m, shape };
+            // Re-derive the bounds from the drawn points, and re-centre them so
+            // the mass keeps rotating about its own middle.
+            const bounds = pointsBounds(shape.points);
+            const w = Math.max(4, bounds.maxX - bounds.minX);
+            const d = Math.max(4, bounds.maxZ - bounds.minZ);
+            const cx = (bounds.minX + bounds.maxX) / 2;
+            const cz = (bounds.minZ + bounds.maxZ) / 2;
+            return {
+              ...m,
+              w,
+              d,
+              shape: {
+                ...shape,
+                points: shape.points.map(([x, z]) => [x - cx, z - cz] as [number, number]),
+                holes: shape.holes?.map((h) => h.map(([x, z]) => [x - cx, z - cz] as [number, number])),
+              },
+            };
+          }),
+        })),
+      ),
 
     patchMass: (schemeId, massId, patch) =>
       commit(

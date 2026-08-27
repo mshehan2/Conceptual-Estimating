@@ -14,6 +14,7 @@ import { capacity, circulation, grossingFactor, programUnits } from "@/domain/pr
 import { grossArea, wallHeight } from "@/domain/massing";
 import { useActiveEstimate, useActiveScheme, useProject } from "../store/useProject";
 import { Field, NumberInput, Section, Select, Segmented, Empty } from "@/ui/primitives";
+import { PlanEditor } from "./PlanEditor";
 import { num, pct } from "@/ui/format";
 import type { GlazingPreset, RoofKind, SkinKey } from "@/markets/types";
 import { SKIN_SPECS } from "@/render/textures";
@@ -29,6 +30,7 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
   const estimate = useActiveEstimate();
   const setSchemeCapacity = useProject((s) => s.setSchemeCapacity);
   const patchMass = useProject((s) => s.patchMass);
+  const setMassShape = useProject((s) => s.setMassShape);
   const addMass = useProject((s) => s.addMass);
   const removeMass = useProject((s) => s.removeMass);
 
@@ -159,14 +161,14 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
         </div>
       </Section>
 
-      <Section title="Massing" meta={`${num(mass.w)}′ × ${num(mass.d)}′`} defaultOpen={false}>
+      <PlanEditor
+        mass={mass}
+        onShape={(shape, recenter) => setMassShape(scheme.id, mass.id, shape, recenter)}
+        onSize={(w, d) => patchMass(scheme.id, mass.id, { w, d })}
+      />
+
+      <Section title="Massing" meta={`${num(mass.floors)} floors`} defaultOpen={false}>
         <div className="grid-2">
-          <Field label="Width (ft)">
-            <NumberInput value={mass.w} min={10} onChange={(v) => patchMass(scheme.id, mass.id, { w: v })} />
-          </Field>
-          <Field label="Depth (ft)">
-            <NumberInput value={mass.d} min={10} onChange={(v) => patchMass(scheme.id, mass.id, { d: v })} />
-          </Field>
           <Field label="Floor to floor (ft)">
             <NumberInput value={mass.fth} min={7} step={0.5} onChange={(v) => patchMass(scheme.id, mass.id, { fth: v })} />
           </Field>
