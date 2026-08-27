@@ -55,17 +55,19 @@ interface PollResponse {
 
 export class FluxKontextProvider implements RenderProvider {
   readonly id = "flux-kontext";
-  readonly label = "FLUX.1 Kontext";
+  readonly label = "Black Forest Labs (FLUX)";
   readonly summary =
-    "Instruction-led editing of the render. Strong materials and light; structure held by instruction rather than depth conditioning.";
-  readonly usesPasses: PassKind[] = ["beauty"];
+    "Restyles our own render rather than inventing a building. FLUX.2 takes the depth and linework passes alongside it, so the geometry it returns is the geometry we priced.";
+  readonly usesPasses: PassKind[] = ["beauty", "depth", "edge"];
   readonly maxLock: StructureLock = "balanced";
   readonly models = [
-    { id: "flux-kontext-pro", label: "Kontext Pro" },
+    { id: "flux-2-pro", label: "FLUX.2 Pro — best fidelity, multi-reference" },
+    { id: "flux-2-flex", label: "FLUX.2 Flex — exposes steps and guidance" },
+    { id: "flux-kontext-pro", label: "Kontext Pro — targeted edits" },
     { id: "flux-kontext-max", label: "Kontext Max — slower, higher fidelity" },
   ];
 
-  private config: ProviderConfig = { apiKey: "", model: "flux-kontext-pro" };
+  private config: ProviderConfig = { apiKey: "", model: "flux-2-pro" };
   private status: ProviderState = "unconfigured";
   private error: string | null = null;
 
@@ -104,17 +106,49 @@ export class FluxKontextProvider implements RenderProvider {
   // Contract surface: submit, poll, extract.
   // -------------------------------------------------------------------------
 
-  /** Shape the generation request. */
-  private buildBody(request: RenderRequest): Record<string, unknown> {
-    return {
+  /**
+   * Shape the generation request.
+   *
+   * This and `interpret` are the entire contract surface: if BFL changes the
+   * request shape, it changes here and nowhere else.
+   *
+   * FLUX.2 takes several reference images at once, and that is the whole
+   * reason to prefer it here. One beauty render tells the model what the
+   * building looks like; handing it depth and linework alongside tells it
+   * where the geometry actually is, which is the difference between a
+   * photoreal version of OUR building and a photoreal building.
+   *
+   * NOTE: the FLUX.2 field names below are written from the published API
+   * shape and have never been exercised against the live endpoint — this
+   * sandbox cannot reach api.bfl.ai. If the first call returns a 422, the
+   * field name is what to check.
+   */
+  private buildBody(request: RenderRequest, model: string): Record<string, unknown> {
+    const common = {
       prompt: buildPrompt(request.prompt, request.structure),
-      input_image: rawBase64(request.controls.beauty),
       seed: request.seed,
       output_format: "png",
+      aspect_ratio: aspectRatio(request.width, request.height),
+    };
+
+    if (model.startsWith("flux-2")) {
+      const references = [request.controls.beauty, request.controls.depth, request.controls.edge]
+        .filter((c): c is string => Boolean(c))
+        .map(rawBase64);
+      return {
+        ...common,
+        input_images: references,
+        // Flex is the variant that exposes the knobs; Pro ignores them.
+        ...(model === "flux-2-flex" ? { steps: 40, guidance: GUIDANCE[request.structure] } : {}),
+      };
+    }
+
+    return {
+      ...common,
+      input_image: rawBase64(request.controls.beauty),
       prompt_upsampling: false,
       safety_tolerance: 2,
       guidance: GUIDANCE[request.structure],
-      aspect_ratio: aspectRatio(request.width, request.height),
     };
   }
 
@@ -158,7 +192,7 @@ export class FluxKontextProvider implements RenderProvider {
       const submitResponse = await fetch(`${this.base()}/${model}`, {
         method: "POST",
         headers: this.headers(),
-        body: JSON.stringify(this.buildBody(request)),
+        body: JSON.stringify(this.buildBody(request, model)),
         signal: request.signal,
       });
 
