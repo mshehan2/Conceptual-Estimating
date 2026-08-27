@@ -430,10 +430,28 @@ export function bandGeometry(m: Mass): { base: THREE.BufferGeometry | null; reve
 }
 
 /** A ring (and its holes) as a THREE.Shape, for slab and roof geometry. */
+/**
+ * Plan ring → ExtrudeGeometry shape points.
+ *
+ * ExtrudeGeometry builds in the XY plane and the slab is laid flat afterwards
+ * with rotateX(-90°), which maps shape-space y to world MINUS z. Feeding plan
+ * z straight in therefore mirrors the roof. On a rectangle or a centred
+ * courtyard a mirror is invisible, which is how this survived — but on an L
+ * the roof lands over the notch and leaves a hole over the building, and the
+ * estimate is paying for the roof that is not there.
+ *
+ * So negate z. And reverse the ring along with it: mirroring flips the
+ * polygon's winding, computeVertexNormals derives which way the roof faces
+ * from that winding, and a roof facing down is backface-culled into thin air.
+ * Reversing cancels the flip, so the slab keeps pointing up.
+ */
+const shapePoints = (ring: Point[]): THREE.Vector2[] =>
+  ring.map(([x, z]) => new THREE.Vector2(x, -z)).reverse();
+
 function ringShape(ring: Point[], holes: Point[][]): THREE.Shape {
-  const shape = new THREE.Shape(ring.map(([x, z]) => new THREE.Vector2(x, z)));
+  const shape = new THREE.Shape(shapePoints(ring));
   for (const hole of holes) {
-    shape.holes.push(new THREE.Path(hole.map(([x, z]) => new THREE.Vector2(x, z))));
+    shape.holes.push(new THREE.Path(shapePoints(hole)));
   }
   return shape;
 }
@@ -520,7 +538,7 @@ export function roofGeometry(m: Mass): {
       const terrace = new THREE.ExtrudeGeometry(
         (() => {
           const shape = ringShape(band.ring, band.holes);
-          shape.holes.push(new THREE.Path(above.ring.map(([x, z]) => new THREE.Vector2(x, z))));
+          shape.holes.push(new THREE.Path(shapePoints(above.ring)));
           return shape;
         })(),
         { depth: 0.6, bevelEnabled: false, curveSegments: 1 },
