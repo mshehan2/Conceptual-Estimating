@@ -142,6 +142,7 @@ export function RenderPanel({
           </div>
           <input
             type="range"
+            aria-label="Hour of day"
             min={4}
             max={21}
             step={0.25}
@@ -157,6 +158,7 @@ export function RenderPanel({
           </div>
           <input
             type="range"
+            aria-label="Cloud cover"
             min={0}
             max={1}
             step={0.02}
@@ -175,6 +177,7 @@ export function RenderPanel({
           </div>
           <input
             type="range"
+            aria-label="Exposure"
             min={0.3}
             max={2.4}
             step={0.02}
@@ -196,6 +199,7 @@ export function RenderPanel({
         </div>
         <input
           type="range"
+          aria-label="Viewport samples"
           min={16}
           max={400}
           step={8}

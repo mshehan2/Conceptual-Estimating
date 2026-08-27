@@ -57,12 +57,15 @@ async function main() {
   await page.screenshot({ path: join(OUT, "01-default.png") });
 
   // Keep sample counts low: this is a correctness check, not a beauty contest.
+  // Sliders are addressed by name, never by position: the quality control lives
+  // in a collapsed section, so "the last range input" is the exposure slider,
+  // and setting that to 24 pins exposure at its ceiling and blows out every
+  // screenshot the run then takes.
   await page.getByRole("tab", { name: "Render" }).click();
   await page.waitForTimeout(300);
-  await page.locator('input[type="range"]').last().evaluate((el) => {
-    el.value = "24";
-    el.dispatchEvent(new Event("input", { bubbles: true }));
-  });
+  await page.locator(".section-head", { hasText: "Quality" }).click();
+  await page.waitForTimeout(300);
+  await setSlider(page, "Viewport samples", 24);
 
   for (const [i, camera] of CAMERAS.entries()) {
     await page.getByRole("button", { name: camera, exact: true }).click();
@@ -111,10 +114,21 @@ async function main() {
     });
   }
 
+  // Read back the settings actually in effect, so a run that silently drove a
+  // control to its limit is visible in the report rather than only in the image.
+  const settings = await page.evaluate(() => {
+    const read = (label) => {
+      const el = document.querySelector(`input[aria-label="${label}"]`);
+      return el ? Number(el.value) : null;
+    };
+    return { exposure: read("Exposure"), samples: read("Viewport samples"), hour: read("Hour of day") };
+  }).catch(() => null);
+
   const report = {
     passes: labels,
     timings,
     sheetLayout,
+    settings,
     errors: [...new Set(errors)].slice(0, 10),
   };
   writeFileSync(join(OUT, "report.json"), JSON.stringify(report, null, 2));
@@ -125,6 +139,15 @@ async function main() {
   const failed =
     labels.length < 4 || !sheetLayout?.footerPresent || sheetLayout?.overflowing || report.errors.length > 0;
   process.exit(failed ? 1 : 0);
+}
+
+/** Set a labelled range input and fire the event React listens for. */
+async function setSlider(page, label, value) {
+  const slider = page.getByLabel(label);
+  await slider.evaluate((el, v) => {
+    el.value = String(v);
+    el.dispatchEvent(new Event("input", { bubbles: true }));
+  }, value);
 }
 
 /** Poll until a count goes non-zero, so slow software rendering is tolerated. */
