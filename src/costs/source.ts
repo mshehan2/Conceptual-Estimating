@@ -81,6 +81,12 @@ export abstract class BaseCostSource implements CostSource {
   capabilities(): SourceCapabilities {
     return { conceptual: false, unitCosts: false, indices: false, refreshable: false, writable: false };
   }
+  async init(): Promise<void> {
+    /* nothing to warm up by default */
+  }
+  async refresh(): Promise<void> {
+    /* not refreshable by default */
+  }
   status(): SourceStatus {
     return { state: "ready" };
   }
