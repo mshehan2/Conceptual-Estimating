@@ -136,7 +136,7 @@ const ROWS: Row[] = [
   ["canopy_cantilever", "Entry canopy - cantilevered", "SF", 95, 130, 178, "05 50 00", "B1080"],
   ["canopy_supported", "Entry canopy - column or rod supported", "SF", 78, 105, 145, "05 50 00", "B1080"],
   ["canopy_column", "Canopy column", "EA", 3800, 5200, 7400, "05 12 00", "B1080"],
-  ["porte_cochere", "Porte cochere structure & roof", "SF", 130, 178, 245, "05 12 00", "B1080"],
+  ["porte_cochere", "Porte cochère structure & roof", "SF", 130, 178, 245, "05 12 00", "B1080"],
   ["bay_structure", "Projecting bay - framing & floor extension", "SF", 62, 86, 120, "05 40 00", "B1010"],
   ["storefront", "Storefront / lobby glazing", "SF", 92, 122, 165, "08 43 00", "B2020"],
   ["sunshade", "Exterior sunshade", "LF", 105, 145, 200, "10 71 13", "B2010"],

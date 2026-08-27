@@ -281,7 +281,7 @@ export function makeFeature(kind: FeatureKind, over: Partial<Feature> = {}): Fea
 
 export const FEATURE_LABELS: Record<FeatureKind, string> = {
   canopy: "Entry canopy",
-  porte_cochere: "Porte cochere",
+  porte_cochere: "Porte cochère",
   bay: "Projecting bay",
   lobby: "Glazed lobby volume",
   sunshade: "Sunshades",
@@ -297,6 +297,21 @@ export const FEATURE_LABELS: Record<FeatureKind, string> = {
   roof_screen: "Rooftop screen",
   cornice: "Cornice band",
 };
+
+/**
+ * Copy a feature onto its own identity.
+ *
+ * `makeFeature(kind, source)` looks like it does this, but the spread puts the
+ * source's `id` back over the fresh one — so the "copy" IS the original, and
+ * deleting either deletes both. The id rule lives here so no caller has to
+ * remember it.
+ */
+export function copyFeature(source: Feature, over: Partial<Feature> = {}): Feature {
+  // Omit the key rather than setting it undefined: the spread in makeFeature
+  // puts `over` last, so an explicit `id: undefined` would win too.
+  const { id: _drop, ...rest } = source;
+  return makeFeature(source.kind, { ...rest, ...over } as Partial<Feature>);
+}
 
 /** Features that belong to the whole building rather than one wall. */
 export const WHOLE_BUILDING_FEATURES: ReadonlySet<FeatureKind> = new Set<FeatureKind>([

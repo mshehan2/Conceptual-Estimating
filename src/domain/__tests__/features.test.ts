@@ -17,7 +17,7 @@ import { SeedCostSource } from "@/costs/sources/seedSource";
 import { makeMassForType, envelopeTakeoff, footprint, grossArea, roofPlates, floorPlates } from "../massing";
 import { takeoff } from "../takeoff";
 import { estimateScheme } from "../estimate";
-import { makeFeature, resetFeatureSeq } from "../features";
+import { copyFeature, makeFeature, resetFeatureSeq, type Feature } from "../features";
 import type { Mass } from "../massing";
 
 const resolver = new CostResolver().register(new SeedCostSource());
@@ -345,5 +345,47 @@ describe("material banding", () => {
     const [cheaper, dearer] = [allBrick.direct, allMetal.direct].sort((a, b) => a - b);
     expect(banded.direct).toBeGreaterThan(cheaper);
     expect(banded.direct).toBeLessThan(dearer);
+  });
+});
+
+describe("copying a feature", () => {
+  it("gives the copy its own identity", () => {
+    const source = makeFeature("canopy", { width: 33, projection: 11 });
+    const copy = copyFeature(source);
+    expect(copy.id).not.toBe(source.id);
+    expect(copy.id).toBeTruthy();
+  });
+
+  it("carries every parameter across", () => {
+    const source = makeFeature("porte_cochere", {
+      width: 52, projection: 30, height: 17, columns: 4, segment: 2, along: 0.3,
+    } as Partial<Feature>);
+    const copy = copyFeature(source);
+    const { id: _a, ...sourceRest } = source;
+    const { id: _b, ...copyRest } = copy;
+    expect(copyRest).toEqual(sourceRest);
+  });
+
+  it("applies an override on top of the source", () => {
+    const source = makeFeature("balcony", { along: 0.5 } as Partial<Feature>);
+    const copy = copyFeature(source, { along: 0.68 });
+    expect(copy.along).toBeCloseTo(0.68, 6);
+    expect(source.along).toBeCloseTo(0.5, 6);
+  });
+
+  it("copies a disabled feature as disabled", () => {
+    const copy = copyFeature(makeFeature("bay", { disabled: true }));
+    expect(copy.disabled).toBe(true);
+  });
+
+  it("keeps the two independent, so editing one leaves the other alone", () => {
+    const source = makeFeature("lobby");
+    const copy = copyFeature(source);
+    const features = [source, copy];
+    const edited = features.map((f) => (f.id === copy.id ? { ...f, width: 99 } : f));
+    expect((edited[0] as { width: number }).width).not.toBe(99);
+    expect((edited[1] as { width: number }).width).toBe(99);
+    // And deleting one leaves exactly one behind, which is the bug that was shipped.
+    expect(features.filter((f) => f.id !== copy.id)).toHaveLength(1);
   });
 });

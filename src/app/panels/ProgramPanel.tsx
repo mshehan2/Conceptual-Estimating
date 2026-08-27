@@ -15,6 +15,7 @@ import { grossArea, wallHeight } from "@/domain/massing";
 import { useActiveEstimate, useActiveScheme, useProject } from "../store/useProject";
 import { Field, NumberInput, Section, Select, Segmented, Empty } from "@/ui/primitives";
 import { PlanEditor } from "./PlanEditor";
+import { FeatureEditor } from "./FeatureEditor";
 import { num, pct } from "@/ui/format";
 import type { GlazingPreset, RoofKind, SkinKey } from "@/markets/types";
 import { SKIN_SPECS } from "@/render/textures";
@@ -33,6 +34,11 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
   const setMassShape = useProject((s) => s.setMassShape);
   const addMass = useProject((s) => s.addMass);
   const removeMass = useProject((s) => s.removeMass);
+  const featureCosts = useProject((s) => s.featureCosts);
+  const addFeature = useProject((s) => s.addFeature);
+  const patchFeature = useProject((s) => s.patchFeature);
+  const removeFeature = useProject((s) => s.removeFeature);
+  const duplicateFeature = useProject((s) => s.duplicateFeature);
 
   if (!scheme) return <Empty>No scheme selected.</Empty>;
 
@@ -165,6 +171,15 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
         mass={mass}
         onShape={(shape, recenter) => setMassShape(scheme.id, mass.id, shape, recenter)}
         onSize={(w, d) => patchMass(scheme.id, mass.id, { w, d })}
+      />
+
+      <FeatureEditor
+        mass={mass}
+        costs={featureCosts}
+        onAdd={(kind) => addFeature(scheme.id, mass.id, kind)}
+        onPatch={(id, patch) => patchFeature(scheme.id, mass.id, id, patch)}
+        onRemove={(id) => removeFeature(scheme.id, mass.id, id)}
+        onDuplicate={(id) => duplicateFeature(scheme.id, mass.id, id)}
       />
 
       <Section title="Massing" meta={`${num(mass.floors)} floors`} defaultOpen={false}>

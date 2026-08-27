@@ -11,6 +11,7 @@ import { create } from "zustand";
 import type { Mass } from "@/domain/massing";
 import type { SchemeEstimate } from "@/domain/estimate";
 import { estimateScheme } from "@/domain/estimate";
+import { priceFeatures, type FeatureCost } from "@/domain/featureCost";
 import { takeoff } from "@/domain/takeoff";
 import {
   activeScheme,
@@ -26,6 +27,7 @@ import {
 } from "@/domain/project";
 import { seedProgramForType, fitFootprint } from "@/domain/program";
 import { makeMassForType } from "@/domain/massing";
+import { copyFeature, makeFeature, type Feature, type FeatureKind } from "@/domain/features";
 import { TYPE_BY_ID, typesForMarket } from "@/markets/registry";
 import { nearestCity, cityIndex } from "@/costs/seed/locations";
 import type { FootprintShape, Point } from "@/domain/footprint";
@@ -38,6 +40,12 @@ export interface ProjectState {
   project: Project;
   /** Estimate per scheme id. Recomputed whenever inputs change. */
   estimates: Record<string, SchemeEstimate>;
+  /**
+   * Cost of each individual feature, keyed by feature id, across every scheme.
+   * Computed alongside the estimate so the feature editor can show what a move
+   * costs while it is being made rather than only in the totals afterwards.
+   */
+  featureCosts: Record<string, FeatureCost>;
   estimating: boolean;
   /** Bumped whenever a cost source changes, to force re-estimation. */
   sourceRevision: number;
@@ -80,6 +88,12 @@ export interface ProjectState {
    */
   setMassShape: (schemeId: string, massId: string, shape: FootprintShape, recenter?: boolean) => void;
   addMass: (schemeId: string, typeId?: string) => void;
+
+  // --- features ---
+  addFeature: (schemeId: string, massId: string, kind: FeatureKind, segment?: number) => void;
+  patchFeature: (schemeId: string, massId: string, featureId: string, patch: Partial<Feature>) => void;
+  removeFeature: (schemeId: string, massId: string, featureId: string) => void;
+  duplicateFeature: (schemeId: string, massId: string, featureId: string) => void;
   removeMass: (schemeId: string, massId: string) => void;
 
   // --- cost sources ---
@@ -142,6 +156,8 @@ export const useProject = create<ProjectState>((set, get) => {
       const { project } = get();
       overrideSource.loadJSON(project.overrides);
 
+      const featureCostEntries: [string, FeatureCost][] = [];
+
       const entries = await Promise.all(
         project.schemes.map(async (scheme) => {
           const t = takeoff(scheme.masses, {
@@ -156,13 +172,29 @@ export const useProject = create<ProjectState>((set, get) => {
             adjustment: project.settings.adjustment,
             band: project.settings.band,
           });
+          // Price each feature individually, for the editor's live readout.
+          for (const mass of scheme.masses) {
+            if (!(mass.features ?? []).length) continue;
+            const costs = await priceFeatures(mass, resolver, {
+              marketId: TYPE_BY_ID[scheme.typeId]?.marketId ?? project.marketId,
+              typeId: scheme.typeId,
+              adjustment: project.settings.adjustment,
+              band: project.settings.band,
+            });
+            for (const cost of costs) featureCostEntries.push([cost.featureId, cost]);
+          }
+
           return [scheme.id, est] as const;
         }),
       );
 
       // A newer recompute started while this one was in flight; drop this one.
       if (token !== recomputeToken) return;
-      set({ estimates: Object.fromEntries(entries), estimating: false });
+      set({
+        estimates: Object.fromEntries(entries),
+        featureCosts: Object.fromEntries(featureCostEntries),
+        estimating: false,
+      });
     }, 60);
   };
 
@@ -187,6 +219,7 @@ export const useProject = create<ProjectState>((set, get) => {
   return {
     project: initial,
     estimates: {},
+    featureCosts: {},
     estimating: true,
     sourceRevision: 0,
 
@@ -364,6 +397,60 @@ export const useProject = create<ProjectState>((set, get) => {
           const mass = makeMassForType(type, { x: east + 60, program: {} });
           return { ...s, masses: [...s.masses, mass] };
         }),
+      ),
+
+    addFeature: (schemeId, massId, kind, segment) =>
+      commit(
+        mapScheme(schemeId, (s) => ({
+          ...s,
+          masses: s.masses.map((m) =>
+            m.id === massId
+              ? { ...m, features: [...(m.features ?? []), makeFeature(kind, segment != null ? { segment } : {})] }
+              : m,
+          ),
+        })),
+      ),
+
+    patchFeature: (schemeId, massId, featureId, patch) =>
+      commit(
+        mapScheme(schemeId, (s) => ({
+          ...s,
+          masses: s.masses.map((m) =>
+            m.id === massId
+              ? {
+                  ...m,
+                  features: (m.features ?? []).map((f) =>
+                    f.id === featureId ? ({ ...f, ...patch } as Feature) : f,
+                  ),
+                }
+              : m,
+          ),
+        })),
+      ),
+
+    removeFeature: (schemeId, massId, featureId) =>
+      commit(
+        mapScheme(schemeId, (s) => ({
+          ...s,
+          masses: s.masses.map((m) =>
+            m.id === massId ? { ...m, features: (m.features ?? []).filter((f) => f.id !== featureId) } : m,
+          ),
+        })),
+      ),
+
+    duplicateFeature: (schemeId, massId, featureId) =>
+      commit(
+        mapScheme(schemeId, (s) => ({
+          ...s,
+          masses: s.masses.map((m) => {
+            if (m.id !== massId) return m;
+            const source = (m.features ?? []).find((f) => f.id === featureId);
+            if (!source) return m;
+            // Offset the copy along the wall so it is not hidden underneath.
+            const copy = copyFeature(source, { along: Math.min(0.92, source.along + 0.18) });
+            return { ...m, features: [...(m.features ?? []), copy] };
+          }),
+        })),
       ),
 
     removeMass: (schemeId, massId) =>
