@@ -166,6 +166,26 @@ export function pavingMaterial(mode: RenderMode): THREE.Material {
   );
 }
 
+/**
+ * Base course and floor-line reveals. Deliberately a shade darker than the
+ * field material so the horizontal lines carry even in flat overcast light,
+ * where a same-tone reveal would vanish.
+ */
+export function trimMaterial(mode: RenderMode, tint?: number): THREE.Material {
+  if (mode === "clay") {
+    return remember("clay-trim", () => new THREE.MeshStandardMaterial({ color: 0xd6d2ca, roughness: 0.9 }));
+  }
+  if (mode === "program") {
+    const color = tint ?? 0x8a939b;
+    return remember(`program-trim-${color}`, () =>
+      new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.72), roughness: 0.8 }),
+    );
+  }
+  return remember("trim", () =>
+    new THREE.MeshStandardMaterial({ color: 0x9c9791, roughness: 0.88, metalness: 0.02 }),
+  );
+}
+
 /** Context buildings: present but visibly not scope. */
 export function contextMaterial(): THREE.Material {
   return remember("context", () =>

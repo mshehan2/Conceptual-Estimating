@@ -139,6 +139,9 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
 
     const scene = new THREE.Scene();
     const camera = new THREE.PerspectiveCamera(40, 1, 1, 20000);
+    // Without haze the ground plane simply stops, and a visible edge to the
+    // world reads as a modelling error rather than as distance.
+    scene.fog = new THREE.Fog(0xbfc9d2, 1200, 9000);
 
     const sun = new THREE.DirectionalLight(0xffffff, 2.2);
     sun.castShadow = true;
@@ -150,10 +153,11 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
 
     // A hemisphere light on top of the environment map keeps north-facing
     // walls from going flat black when the sky map is dim.
-    const fill = new THREE.HemisphereLight(0xbdd3ea, 0x6d6a5e, 0.35);
+    const fill = new THREE.HemisphereLight(0xbdd3ea, 0x6d6a5e, 0.18);
     scene.add(fill);
 
     const sky = new SkyEnvironment(renderer);
+    scene.add(sky.dome);
     const progressive = new ProgressiveRenderer(renderer, { maxSamples: settings.maxSamples });
     progressive.setSun(sun);
 
@@ -184,6 +188,7 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
       if (!s) return;
 
       applyOrbit(s.camera, s.orbit);
+      s.sky.followCamera(s.camera);
 
       if (s.interacting) {
         // Hard shadows, one pass, no accumulation — responsiveness wins.
@@ -359,7 +364,7 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
     // An overcast sky scatters the direct beam into the dome, so the key drops
     // and the ambient rises rather than the whole scene just going dark.
     s.sun.intensity = lighting.intensity * (1 - settings.overcast * 0.82);
-    s.fill.intensity = 0.28 + settings.overcast * 0.75;
+    s.fill.intensity = 0.14 + settings.overcast * 0.7;
 
     s.progressive.setSun(s.sun);
     // A hazier sky means a bigger effective source, so a wider jitter cone.
@@ -372,8 +377,16 @@ export const Viewport = forwardRef<ViewportHandle, Props>(function Viewport(
       overcast: settings.overcast,
       exposure: 1,
     });
+    // Match the haze to the sky at the horizon, warming it toward a low sun.
+    if (s.scene.fog instanceof THREE.Fog) {
+      const warm = Math.max(0, 1 - Math.max(0, pos.altitude) / 25);
+      s.scene.fog.color
+        .setHex(0xbfc9d2)
+        .lerp(new THREE.Color(0xd8b48c), warm * 0.7)
+        .lerp(new THREE.Color(0xb9bdc2), settings.overcast * 0.6);
+    }
+    // The environment map lights the scene; the dome mesh is what is seen.
     s.scene.environment = env;
-    s.scene.background = env;
     s.scene.environmentIntensity = 1;
 
     if (s.build) fitShadowCamera(s.sun, s.build.bounds);

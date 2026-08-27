@@ -55,12 +55,11 @@ export function facadeOpenings(m: Mass, side: Facade): Opening[] {
     const base = f * m.fth;
 
     if (m.glz === "punched") {
-      const run = length * coverage;
-      const { n, pitch, start } = punchedLayout(run, m.winW, m.oc);
+      const { n, pitch, start } = punchedLayout(length, m.winW, m.oc, coverage);
       for (let i = 0; i < n; i++) {
         const centre = length / 2 + start + i * pitch;
         const u = centre - m.winW / 2;
-        if (u < 0.6 || u + m.winW > length - 0.6) continue;
+        if (u < 0.4 || u + m.winW > length - 0.4) continue;
         openings.push({ u, v: base + sill, width: m.winW, height: bandH });
       }
     } else {
@@ -219,6 +218,37 @@ export function mullionGeometry(build: FacadeBuild, spacing = 5): THREE.BufferGe
     }
   }
   return mergeGeometries(geometries);
+}
+
+/**
+ * Horizontal expression: a base course at grade and a slim reveal at each floor
+ * line. Cheap geometry, and the single biggest step from "extruded footprint"
+ * toward something that reads as a building — it gives the eye a storey count
+ * and catches a shadow line all the way round.
+ */
+export function bandGeometry(m: Mass): { base: THREE.BufferGeometry | null; reveals: THREE.BufferGeometry | null } {
+  const proud = 0.42;
+  const w = m.w + proud * 2;
+  const d = m.d + proud * 2;
+
+  const baseHeight = Math.min(3.4, m.fth * 0.34);
+  const base = new THREE.BoxGeometry(w, baseHeight, d);
+  base.translate(0, baseHeight / 2, 0);
+  applyBoxUV(base);
+
+  // One reveal per floor line above the base, skipping grade and the parapet.
+  const reveals: THREE.BufferGeometry[] = [];
+  const thickness = 0.55;
+  for (let floor = 1; floor < m.floors; floor++) {
+    const y = floor * m.fth;
+    const band = new THREE.BoxGeometry(w, thickness, d);
+    band.translate(0, y, 0);
+    reveals.push(band);
+  }
+
+  const merged = reveals.length ? mergeGeometries(reveals) : null;
+  if (merged) applyBoxUV(merged);
+  return { base, reveals: merged };
 }
 
 /** Roof and parapet for a mass, in local coordinates. */

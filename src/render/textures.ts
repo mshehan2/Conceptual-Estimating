@@ -166,8 +166,10 @@ const paintLapSiding =
       height.ctx.fillRect(0, y, size, courseH);
 
       // The shadow line is darker in albedo too.
-      albedo.ctx.fillStyle = "rgba(0,0,0,0.22)";
-      albedo.ctx.fillRect(0, y + courseH - Math.max(1, courseH * 0.09), size, Math.max(1, courseH * 0.09));
+      // The lap shadow has to be strong: at any real viewing distance a course
+      // line is about one pixel tall, and a subtle line at one pixel is no line.
+      albedo.ctx.fillStyle = "rgba(0,0,0,0.42)";
+      albedo.ctx.fillRect(0, y + courseH - Math.max(1.5, courseH * 0.12), size, Math.max(1.5, courseH * 0.12));
     }
   };
 
@@ -363,12 +365,12 @@ interface SkinSpec {
 
 export const SKIN_SPECS: Record<SkinKey, SkinSpec> = {
   brick: {
-    painter: paintBrick([158, 92, 68], 34, 12),
+    painter: paintBrick([146, 76, 54], 44, 12),
     tileFeet: 8, normalScale: 1.1, roughness: 0.92, metalness: 0, color: 0xffffff, seed: 11,
     label: "Brick veneer",
   },
   fiber_cement: {
-    painter: paintLapSiding([196, 194, 186], 14),
+    painter: paintLapSiding([172, 172, 166], 14),
     tileFeet: 9, normalScale: 0.85, roughness: 0.88, metalness: 0, color: 0xffffff, seed: 23,
     label: "Fiber cement siding",
   },
@@ -378,22 +380,22 @@ export const SKIN_SPECS: Record<SkinKey, SkinSpec> = {
     label: "Metal panel",
   },
   stucco: {
-    painter: paintStucco([214, 208, 196], 26),
+    painter: paintStucco([198, 190, 176], 30),
     tileFeet: 12, normalScale: 0.4, roughness: 0.95, metalness: 0, color: 0xffffff, seed: 41,
     label: "Stucco",
   },
   eifs: {
-    painter: paintStucco([222, 218, 208], 18),
+    painter: paintStucco([206, 201, 190], 20),
     tileFeet: 12, normalScale: 0.32, roughness: 0.92, metalness: 0, color: 0xffffff, seed: 43,
     label: "EIFS",
   },
   precast: {
-    painter: paintPanel([196, 192, 184], 3, 4, 0),
+    painter: paintPanel([178, 175, 168], 3, 4, 0),
     tileFeet: 24, normalScale: 0.7, roughness: 0.86, metalness: 0.02, color: 0xffffff, seed: 53,
     label: "Architectural precast",
   },
   tilt_up: {
-    painter: paintPanel([186, 183, 176], 2, 2, 0),
+    painter: paintPanel([170, 167, 161], 2, 2, 0),
     tileFeet: 40, normalScale: 0.6, roughness: 0.93, metalness: 0, color: 0xffffff, seed: 59,
     label: "Tilt-up concrete",
   },

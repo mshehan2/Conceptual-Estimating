@@ -282,8 +282,10 @@ export class ProgressiveRenderer {
       .normalize()
       .multiplyScalar(radius);
 
-    // The shadow map must be redrawn for the jitter to reach the shadows.
-    light.shadow.needsUpdate = true;
+    // The shadow map must be redrawn for the jitter to reach the shadows. The
+    // flag that forces that lives on the renderer's shadow map, not on the
+    // light's own shadow — setting the latter silently does nothing.
+    this.renderer.shadowMap.needsUpdate = true;
   }
 
   private restoreSun(): void {

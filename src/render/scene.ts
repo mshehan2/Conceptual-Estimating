@@ -20,9 +20,11 @@ import {
   pavingMaterial,
   roofMaterial,
   scaledWallMaterial,
+  trimMaterial,
   type RenderMode,
 } from "./materials";
 import {
+  bandGeometry,
   facadeBuilds,
   gableGeometry,
   glassGeometry,
@@ -96,6 +98,17 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
         group.add(mullionMesh);
       }
     }
+  }
+
+  // Base course and floor-line reveals, before the roof so they sit under it.
+  const bands = bandGeometry(mass);
+  for (const geometry of [bands.base, bands.reveals]) {
+    if (!geometry) continue;
+    disposables.push(geometry);
+    const bandMesh = new THREE.Mesh(geometry, mass.context ? contextMaterial() : trimMaterial(mode, tint));
+    bandMesh.castShadow = true;
+    bandMesh.receiveShadow = true;
+    group.add(bandMesh);
   }
 
   const { roof, parapet } = roofGeometry(mass);

@@ -172,12 +172,32 @@ export function glassBand(m: Mass): { bandH: number; sill: number } {
   return { bandH: Math.max(0, Math.min(raw, m.fth - sill)), sill };
 }
 
-/** Punched window count and centered start position along a facade run. */
-export function punchedLayout(len: number, winW: number, oc: number) {
-  const pitch = Math.max(winW + 0.5, oc || winW + 0.5);
-  const n = len >= winW ? Math.floor((len - winW) / pitch) + 1 : 0;
-  const span = (n - 1) * pitch + winW;
-  return { n, pitch, start: -span / 2 + winW / 2 };
+/**
+ * Punched window layout along a facade run.
+ *
+ * `coverage` is the fraction of the facade length that ends up as glass, and
+ * the windows are spread evenly across the WHOLE run to achieve it. Treating
+ * coverage as a shortened run instead would bunch every window into the middle
+ * of the elevation and leave the ends blank, which is not what any building
+ * does and not what the takeoff assumed.
+ *
+ * `oc` acts as a maximum spacing: it can add windows beyond what coverage asks
+ * for, but never pulls them into a huddle.
+ */
+export function punchedLayout(len: number, winW: number, oc: number, coverage = 1) {
+  const usable = Math.max(0, len - 2); // hold a corner return at each end
+  if (usable < winW || winW <= 0) return { n: 0, pitch: 0, start: 0 };
+
+  const cov = Math.max(0, Math.min(1, coverage));
+  const byCoverage = Math.floor((len * cov) / winW);
+  const byMaxSpacing = oc > 0 ? Math.floor(usable / Math.max(winW + 0.5, oc)) + 1 : 0;
+  const n = Math.max(0, Math.min(Math.max(byCoverage, byMaxSpacing), Math.floor(usable / (winW + 0.5))));
+  if (n <= 0) return { n: 0, pitch: 0, start: 0 };
+  if (n === 1) return { n: 1, pitch: 0, start: 0 };
+
+  // Even bays across the usable run, windows centred in each bay.
+  const pitch = (usable - winW) / (n - 1);
+  return { n, pitch, start: -(usable - winW) / 2 };
 }
 
 /** Resolve the skin actually used on a facade. */
@@ -237,7 +257,7 @@ export function envelopeTakeoff(m: Mass): EnvelopeTakeoff {
     let sideGlass = 0;
     if (glazingOn && m.sides[side]) {
       if (m.glz === "punched") {
-        const { n } = punchedLayout(len * coverage, m.winW, m.oc);
+        const { n } = punchedLayout(len, m.winW, m.oc, coverage);
         sideGlass = n * m.winW * bandH * glazedFloors;
       } else {
         sideGlass = len * coverage * bandH * glazedFloors;
