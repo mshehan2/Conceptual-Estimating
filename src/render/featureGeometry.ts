@@ -15,20 +15,38 @@ import * as THREE from "three";
 import type { Mass } from "@/domain/massing";
 import { massSegments, wallHeight } from "@/domain/massing";
 import type {
+  AtriumFeature,
+  BalconyFeature,
   BayFeature,
+  BriseSoleilFeature,
   CanopyFeature,
+  ConnectorFeature,
   CorniceFeature,
   Feature,
+  FeatureCornerFeature,
   LobbyFeature,
+  LoggiaFeature,
+  PergolaFeature,
+  PlazaFeature,
   PorteCochereFeature,
   RoofScreenFeature,
   SunshadeFeature,
+  TerraceFeature,
 } from "@/domain/features";
 import type { FacadeSegment } from "@/domain/footprint";
-import { mergeGeometries } from "./massGeometry";
+import { massBands, mergeGeometries } from "./massGeometry";
 
 /** Which material a feature's geometry should be drawn with. */
-export type FeatureMaterialKey = "canopy" | "glazing" | "storefront" | "mullion" | "wall" | "screen" | "trim";
+export type FeatureMaterialKey =
+  | "canopy"
+  | "glazing"
+  | "storefront"
+  | "mullion"
+  | "wall"
+  | "screen"
+  | "trim"
+  | "paving"
+  | "planting";
 
 export interface FeatureGeometry {
   featureId: string;
@@ -249,6 +267,264 @@ function corniceGeometry(f: CorniceFeature, m: Mass, segments: FacadeSegment[]):
   return merged ? [{ featureId: f.id, material: "trim", geometry: merged }] : [];
 }
 
+/** Vertical fins or deep horizontal blades across a glazed elevation. */
+function briseSoleilGeometry(f: BriseSoleilFeature, m: Mass, segments: FacadeSegment[]): FeatureGeometry[] {
+  const targets = f.segment >= 0 ? [segments[f.segment]].filter(Boolean) : segments.filter((s) => !s.courtFacing);
+  const height = m.floors * m.fth;
+  const parts: THREE.BufferGeometry[] = [];
+
+  for (const segment of targets) {
+    const run = segment.length * Math.max(0, Math.min(1, f.coverage));
+    const place = placeOn(segment, 0.5, run);
+    const spacing = Math.max(0.75, f.spacing);
+
+    if (f.orientation === "vertical") {
+      const fins = Math.max(1, Math.floor(run / spacing));
+      for (let i = 0; i < fins; i++) {
+        const x = (i / Math.max(1, fins - 1) - 0.5) * (run - 0.6);
+        parts.push(partAt(0.35, height, f.projection, x, height / 2, f.projection / 2, place));
+      }
+    } else {
+      const blades = Math.max(1, Math.floor(height / spacing));
+      for (let i = 0; i < blades; i++) {
+        const y = (i + 0.5) * (height / blades);
+        parts.push(partAt(run, 0.3, f.projection, 0, y, f.projection / 2, place));
+      }
+    }
+  }
+
+  const merged = mergeGeometries(parts);
+  return merged ? [{ featureId: f.id, material: "screen", geometry: merged }] : [];
+}
+
+/** Balconies repeated up the elevation, with a guard rail on each. */
+function balconyGeometry(f: BalconyFeature, m: Mass, place: Placement): FeatureGeometry[] {
+  const top = Math.min(f.toFloor, m.floors - 1);
+  const levels = Math.max(0, top - f.fromFloor + 1);
+  if (levels <= 0) return [];
+
+  const decks: THREE.BufferGeometry[] = [];
+  const rails: THREE.BufferGeometry[] = [];
+  const count = Math.max(1, f.count);
+  const span = place.wallLength - 6;
+
+  for (let level = 0; level < levels; level++) {
+    const y = (f.fromFloor + level) * m.fth;
+    for (let i = 0; i < count; i++) {
+      const x = count === 1 ? 0 : (i / (count - 1) - 0.5) * span;
+      // A recessed balcony sits inside the face; a projecting one hangs off it.
+      const z = f.recessed ? -f.projection / 2 : f.projection / 2;
+      decks.push(partAt(f.width, 0.7, f.projection, x, y + 0.35, z, place));
+
+      if (!f.recessed) {
+        const railY = y + 2.2;
+        rails.push(partAt(f.width, 0.2, 0.15, x, railY, f.projection, place));
+        for (const side of [-1, 1]) {
+          rails.push(partAt(0.15, 3.4, f.projection, x + (side * f.width) / 2, y + 1.9, z, place));
+        }
+      } else {
+        rails.push(partAt(f.width, 0.2, 0.15, x, y + 2.2, 0, place));
+      }
+    }
+  }
+
+  const out: FeatureGeometry[] = [];
+  const deck = mergeGeometries(decks);
+  const rail = mergeGeometries(rails);
+  if (deck) out.push({ featureId: f.id, material: "trim", geometry: deck });
+  if (rail) out.push({ featureId: f.id, material: "screen", geometry: rail });
+  return out;
+}
+
+/** A recessed outdoor room: a dark void with a soffit and a rail. */
+function loggiaGeometry(f: LoggiaFeature, m: Mass, place: Placement): FeatureGeometry[] {
+  const top = Math.min(f.toFloor, m.floors - 1);
+  const levels = Math.max(0, top - f.fromFloor + 1);
+  if (levels <= 0) return [];
+
+  const width = Math.min(f.width, place.wallLength);
+  const parts: THREE.BufferGeometry[] = [];
+
+  for (let level = 0; level < levels; level++) {
+    const y = (f.fromFloor + level) * m.fth;
+    // Back wall of the recess, set into the plan.
+    parts.push(partAt(width, m.fth, 0.6, 0, y + m.fth / 2, -f.depth, place));
+    // Soffit over the opening.
+    parts.push(partAt(width, 0.5, f.depth, 0, y + m.fth - 0.25, -f.depth / 2, place));
+    // Side reveals.
+    for (const side of [-1, 1]) {
+      parts.push(partAt(0.6, m.fth, f.depth, (side * width) / 2, y + m.fth / 2, -f.depth / 2, place));
+    }
+  }
+
+  const merged = mergeGeometries(parts);
+  return merged ? [{ featureId: f.id, material: "wall", geometry: merged }] : [];
+}
+
+/** A glazed corner wrapping two walls. */
+function featureCornerGeometry(
+  f: FeatureCornerFeature,
+  m: Mass,
+  segments: FacadeSegment[],
+): FeatureGeometry[] {
+  const segment = segments[f.segment];
+  if (!segment) return [];
+  const next = segments[(f.segment + 1) % segments.length];
+
+  const top = Math.min(f.toFloor, m.floors - 1);
+  const levels = Math.max(0, top - f.fromFloor + 1);
+  if (levels <= 0) return [];
+  const height = levels * m.fth;
+  const baseY = f.fromFloor * m.fth;
+
+  const glass: THREE.BufferGeometry[] = [];
+  const bars: THREE.BufferGeometry[] = [];
+
+  // Wrap the end of this wall and the start of the next, meeting at the corner.
+  for (const [seg, atEnd] of [[segment, true], [next, false]] as const) {
+    if (!seg) continue;
+    const wrap = Math.min(f.wrap, seg.length);
+    const along = atEnd ? 1 - wrap / seg.length / 2 : wrap / seg.length / 2;
+    const place = placeOn(seg, along, wrap);
+    glass.push(partAt(wrap, height, 0.5, 0, baseY + height / 2, 0.25, place));
+    for (let i = 0; i <= levels; i++) {
+      bars.push(partAt(wrap + 0.2, 0.35, 0.7, 0, baseY + i * m.fth, 0.3, place));
+    }
+  }
+
+  const out: FeatureGeometry[] = [];
+  const g = mergeGeometries(glass);
+  const b = mergeGeometries(bars);
+  if (g) out.push({ featureId: f.id, material: "storefront", geometry: g });
+  if (b) out.push({ featureId: f.id, material: "mullion", geometry: b });
+  return out;
+}
+
+/** A skylight over an atrium. The void itself is interior, so only the lid shows. */
+function atriumGeometry(f: AtriumFeature, m: Mass): FeatureGeometry[] {
+  if (!f.skylight) return [];
+  const y = m.floors * m.fth + 0.8;
+  const glass = new THREE.BoxGeometry(f.width, 0.5, f.depth);
+  glass.translate(0, y + 1.2, 0);
+
+  const bars: THREE.BufferGeometry[] = [];
+  const bays = Math.max(2, Math.round(f.width / 8));
+  for (let i = 0; i <= bays; i++) {
+    const bar = new THREE.BoxGeometry(0.4, 0.9, f.depth + 0.4);
+    bar.translate((i / bays - 0.5) * f.width, y + 1.2, 0);
+    bars.push(bar);
+  }
+  // A low upstand kerb so the skylight reads as sitting on the roof.
+  const kerb = new THREE.BoxGeometry(f.width + 1.6, 1.6, f.depth + 1.6);
+  kerb.translate(0, y + 0.3, 0);
+  bars.push(kerb);
+
+  return [
+    { featureId: f.id, material: "storefront", geometry: glass },
+    { featureId: f.id, material: "mullion", geometry: mergeGeometries(bars)! },
+  ];
+}
+
+/** A link bridge projecting from a wall. */
+function connectorGeometry(f: ConnectorFeature, m: Mass, place: Placement): FeatureGeometry[] {
+  const height = Math.max(1, f.floors) * m.fth;
+  const y = f.height;
+  const parts = [partAt(f.width, height, f.length, 0, y + height / 2, f.length / 2, place)];
+  const bars: THREE.BufferGeometry[] = [];
+
+  if (f.glazed) {
+    const bays = Math.max(2, Math.round(f.length / 8));
+    for (let i = 0; i <= bays; i++) {
+      bars.push(partAt(f.width + 0.3, 0.4, 0.4, 0, y + height / 2, (i / bays) * f.length, place));
+    }
+  }
+  // Floor and roof bands so it reads as a bridge rather than a glass tube.
+  bars.push(partAt(f.width + 0.5, 0.8, f.length, 0, y, f.length / 2, place));
+  bars.push(partAt(f.width + 0.5, 0.8, f.length, 0, y + height, f.length / 2, place));
+
+  return [
+    { featureId: f.id, material: f.glazed ? "storefront" : "wall", geometry: mergeGeometries(parts)! },
+    { featureId: f.id, material: "mullion", geometry: mergeGeometries(bars)! },
+  ];
+}
+
+/** A roof terrace: deck, rail and planters on the highest setback. */
+function terraceGeometry(f: TerraceFeature, m: Mass, bandTopY: number, ring: [number, number][]): FeatureGeometry[] {
+  const side = Math.sqrt(Math.max(1, f.area));
+  const deck = new THREE.BoxGeometry(side, 0.4, side * 0.7);
+  // Sit it on the largest terrace surface available.
+  const cx = ring.reduce((a, [x]) => a + x, 0) / Math.max(1, ring.length);
+  const cz = ring.reduce((a, [, z]) => a + z, 0) / Math.max(1, ring.length);
+  deck.translate(cx, bandTopY + 0.9, cz);
+
+  const rails: THREE.BufferGeometry[] = [];
+  const halfW = side / 2;
+  const halfD = (side * 0.7) / 2;
+  for (const [dx, dz, w, d] of [
+    [0, halfD, side, 0.15],
+    [0, -halfD, side, 0.15],
+    [halfW, 0, 0.15, side * 0.7],
+    [-halfW, 0, 0.15, side * 0.7],
+  ] as const) {
+    const rail = new THREE.BoxGeometry(w, 3.4, d);
+    rail.translate(cx + dx, bandTopY + 2.6, cz + dz);
+    rails.push(rail);
+  }
+
+  const out: FeatureGeometry[] = [
+    { featureId: f.id, material: "trim", geometry: deck },
+    { featureId: f.id, material: "screen", geometry: mergeGeometries(rails)! },
+  ];
+
+  if (f.planters) {
+    const planters: THREE.BufferGeometry[] = [];
+    for (let i = 0; i < 4; i++) {
+      const box = new THREE.BoxGeometry(side * 0.18, 2.6, side * 0.12);
+      box.translate(cx + (i / 3 - 0.5) * side * 0.8, bandTopY + 2.2, cz - halfD + 2.5);
+      planters.push(box);
+    }
+    out.push({ featureId: f.id, material: "planting", geometry: mergeGeometries(planters)! });
+  }
+  return out;
+}
+
+/** Entry plaza or patio at grade, with an optional seat wall. */
+function plazaGeometry(f: PlazaFeature, place: Placement): FeatureGeometry[] {
+  const paving = partAt(f.width, 0.25, f.depth, 0, 0.12, f.depth / 2 + 1, place);
+  const out: FeatureGeometry[] = [{ featureId: f.id, material: "paving", geometry: paving }];
+
+  if (f.seatWall > 0) {
+    const walls: THREE.BufferGeometry[] = [
+      partAt(Math.min(f.seatWall, f.width), 1.6, 1.4, 0, 0.8, f.depth + 1, place),
+    ];
+    out.push({ featureId: f.id, material: "trim", geometry: mergeGeometries(walls)! });
+  }
+  return out;
+}
+
+/** A pergola over a patio: posts and a slatted top. */
+function pergolaGeometry(f: PergolaFeature, place: Placement): FeatureGeometry[] {
+  const parts: THREE.BufferGeometry[] = [];
+  const post = 0.55;
+
+  for (const sx of [-1, 1]) {
+    for (const sz of [0.15, 0.95]) {
+      parts.push(partAt(post, f.height, post, (sx * (f.width - post)) / 2, f.height / 2, f.projection * sz, place));
+    }
+  }
+  // Beams along the length, then slats across them.
+  for (const sx of [-1, 1]) {
+    parts.push(partAt(0.4, 0.9, f.projection, (sx * (f.width - post)) / 2, f.height, f.projection / 2, place));
+  }
+  const slats = Math.max(3, Math.round(f.width / 1.6));
+  for (let i = 0; i < slats; i++) {
+    const x = (i / (slats - 1) - 0.5) * (f.width - 0.8);
+    parts.push(partAt(0.3, 0.7, f.projection + 0.8, x, f.height + 0.7, f.projection / 2, place));
+  }
+
+  return [{ featureId: f.id, material: "screen", geometry: mergeGeometries(parts)! }];
+}
+
 // ---------------------------------------------------------------------------
 
 /** Geometry for every enabled feature on a mass. */
@@ -265,6 +541,24 @@ export function featureGeometries(m: Mass): FeatureGeometry[] {
     // Whole-building features do their own segment selection.
     if (feature.kind === "sunshade") {
       out.push(...sunshadeGeometry(feature, m, segments));
+      continue;
+    }
+    if (feature.kind === "brise_soleil") {
+      out.push(...briseSoleilGeometry(feature, m, segments));
+      continue;
+    }
+    if (feature.kind === "feature_corner") {
+      out.push(...featureCornerGeometry(feature, m, segments));
+      continue;
+    }
+    if (feature.kind === "atrium") {
+      out.push(...atriumGeometry(feature, m));
+      continue;
+    }
+    if (feature.kind === "terrace") {
+      const bands = massBands(m);
+      const band = bands.length > 1 ? bands[bands.length - 2] : bands[0];
+      out.push(...terraceGeometry(feature, m, band.baseY + band.height, band.ring));
       continue;
     }
     if (feature.kind === "roof_screen") {
@@ -294,6 +588,21 @@ export function featureGeometries(m: Mass): FeatureGeometry[] {
         break;
       case "lobby":
         out.push(...lobbyGeometry(feature, m, place));
+        break;
+      case "balcony":
+        out.push(...balconyGeometry(feature, m, place));
+        break;
+      case "loggia":
+        out.push(...loggiaGeometry(feature, m, place));
+        break;
+      case "connector":
+        out.push(...connectorGeometry(feature, m, place));
+        break;
+      case "plaza":
+        out.push(...plazaGeometry(feature, place));
+        break;
+      case "pergola":
+        out.push(...pergolaGeometry(feature, place));
         break;
     }
   }

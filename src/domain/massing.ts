@@ -27,6 +27,32 @@ import {
 import { featuresTakeoff, makeFeature, type Feature, type FeatureKind } from "./features";
 
 export type Facade = "f" | "b" | "l" | "r";
+
+/** Roof assembly options, priced as a swap on the roof plate. */
+export type RoofAssembly = "membrane" | "green_extensive" | "green_intensive" | "ballasted" | "pv_ready";
+
+/** Rate key each roof assembly prices against. */
+export const ROOF_ASSEMBLY_KEY: Record<RoofAssembly, string> = {
+  membrane: "roof",
+  green_extensive: "roof_green_extensive",
+  green_intensive: "roof_green_intensive",
+  ballasted: "roof_ballasted",
+  pv_ready: "roof_pv_ready",
+};
+
+export const ROOF_ASSEMBLY_LABELS: Record<RoofAssembly, string> = {
+  membrane: "Membrane (TPO/EPDM)",
+  green_extensive: "Green roof - extensive",
+  green_intensive: "Green roof - intensive",
+  ballasted: "Ballasted membrane",
+  pv_ready: "Membrane, PV-ready",
+};
+
+/** The skin in effect on a given floor, honouring vertical banding. */
+export function skinAtFloor(m: Mass, side: Facade, floor: number): SkinKey {
+  const bands = (m.skinBands ?? []).filter((b) => floor >= b.fromFloor).sort((a, b) => b.fromFloor - a.fromFloor);
+  return bands[0]?.skin ?? skinOf(m, side);
+}
 export const FACADES: Facade[] = ["f", "b", "l", "r"];
 
 export interface Mass {
@@ -70,6 +96,13 @@ export interface Mass {
 
   // Roof
   roof: RoofKind;
+  /**
+   * Roof assembly. Swapped on the roof plate rather than added to it, so
+   * choosing a green roof replaces the membrane rate instead of stacking on it.
+   */
+  roofAssembly: RoofAssembly;
+  /** Parapet height, feet. Changes the silhouette and the wall area up top. */
+  parapet: number;
   /** Rise per 12 for pitched roofs. */
   pitch: number;
   /** Ridge runs along width (x) or depth (z). */
@@ -94,6 +127,12 @@ export interface Mass {
   skin: SkinKey;
   /** Per-facade override; null falls back to `skin`. */
   skins: Record<Facade, SkinKey | null>;
+  /**
+   * Vertical material banding: a different cladding from a given floor upward.
+   * A brick base with metal panel above is the most common composed elevation
+   * there is, and one skin per facade cannot express it.
+   */
+  skinBands: { fromFloor: number; skin: SkinKey }[];
 
   // Program
   /** Unit catalog ref -> count. */
@@ -135,6 +174,8 @@ export function makeMass(over: Partial<Mass> = {}): Mass {
     gradeRef: 0,
     grades: null,
     roof: "flat",
+    roofAssembly: "membrane",
+    parapet: 3.5,
     pitch: 6,
     ridge: "w",
     glz: "punched",
@@ -148,6 +189,7 @@ export function makeMass(over: Partial<Mass> = {}): Mass {
     sides: { f: true, b: true, l: true, r: true },
     skin: "fiber_cement",
     skins: { f: null, b: null, l: null, r: null },
+    skinBands: [],
     program: {},
     grossing: null,
     travel: null,
@@ -183,6 +225,9 @@ export function makeMassForType(typeId: string, over: Partial<Mass> = {}): Mass 
     cov: d.glazingCoverage,
     skin: d.skin,
     roof: d.roof,
+    roofAssembly: d.roofAssembly ?? "membrane",
+    parapet: d.parapet ?? 3.5,
+    skinBands: d.skinBands ? [...d.skinBands] : [],
     // A below-grade type is cut into the site by definition, so the grade
     // reference starts at the top of the structure rather than at the slab.
     belowGrade: Boolean(d.belowGrade),
@@ -323,10 +368,33 @@ export function floorPlates(m: Mass): { floor: number; area: number; inset: numb
     // A court does not shrink with a setback, so it is removed at full size.
     plates.push({ floor, area: Math.max(0, ringArea(ring) - courtArea), inset });
   }
+
+  // Voids cut through the plates: an atrium, a recessed balcony, a loggia.
+  // These are the features that make a building smaller, and leaving them out
+  // would overstate both the area and every fee taken as a percentage of it.
+  const voids = plateVoidArea(m);
+  if (voids > 0 && plates.length > 0) {
+    const perFloor = voids / plates.length;
+    for (const plate of plates) plate.area = Math.max(0, plate.area - perFloor);
+  }
+
   return plates;
 }
 
 export const grossArea = (m: Mass): number => floorPlates(m).reduce((a, p) => a + p.area, 0);
+
+/** Total floor plate removed by voids, SF. Always reported as a positive area. */
+export function plateVoidArea(m: Mass): number {
+  if (!(m.features ?? []).length) return 0;
+  const plan = massFootprint(m);
+  const { plateDelta } = featuresTakeoff(m.features ?? [], {
+    segments: facadeSegments(plan),
+    floors: m.floors,
+    floorToFloor: m.fth,
+    roofPerimeter: footprintPerimeter(plan),
+  });
+  return Math.max(0, -plateDelta);
+}
 
 /** Roof area: the top plate, plus any lower roof exposed by a setback. */
 export function roofPlates(m: Mass): number {
@@ -407,8 +475,19 @@ export function envelopeTakeoff(m: Mass): EnvelopeTakeoff {
     glass += segmentGlass;
     if (segmentGlass > 0) glassByType[glassKey] = (glassByType[glassKey] ?? 0) + segmentGlass;
 
-    const skin = skinOf(m, side);
-    opaqueBySkin[skin] = (opaqueBySkin[skin] ?? 0) + Math.max(0, segmentGross - segmentGlass);
+    // Split the opaque area floor by floor so vertical banding is measured as
+    // the separate materials it is, rather than averaged into one skin.
+    const opaqueTotal = Math.max(0, segmentGross - segmentGlass);
+    const banded = (m.skinBands ?? []).length > 0;
+    if (!banded) {
+      const skin = skinOf(m, side);
+      opaqueBySkin[skin] = (opaqueBySkin[skin] ?? 0) + opaqueTotal;
+    } else {
+      for (let floor = 0; floor < m.floors; floor++) {
+        const skin = skinAtFloor(m, side, floor);
+        opaqueBySkin[skin] = (opaqueBySkin[skin] ?? 0) + opaqueTotal / m.floors;
+      }
+    }
   }
 
   // Features adjust the envelope they sit on: a bay adds its returns and hides

@@ -39,6 +39,12 @@ const baseMass = (over: Partial<Mass> = {}): Mass =>
     shape: { kind: "rect" },
     features: [],
     stepbacks: [],
+    // Everything the building type seeds is cleared here. A test measuring one
+    // variable has to start from a controlled baseline, and the type is
+    // deliberately opinionated about all of these.
+    skinBands: [],
+    roofAssembly: "membrane",
+    parapet: 3.5,
     ...over,
   });
 
@@ -181,5 +187,163 @@ describe("setbacks change the massing", () => {
     const extreme = baseMass({ floors: 4, stepbacks: [{ atFloor: 1, inset: 400 }] });
     for (const plate of floorPlates(extreme)) expect(plate.area).toBeGreaterThanOrEqual(0);
     expect(grossArea(extreme)).toBeGreaterThan(0);
+  });
+});
+
+describe("the expanded vocabulary", () => {
+  const priceKeys = async (m: Mass) => {
+    const est = await priceOf(m);
+    return new Map(est.lines.map((l) => [l.key, l]));
+  };
+
+  it("prices brise-soleil more the deeper and closer-spaced the fins", async () => {
+    // Measured on the line, not the building total: a fin array is a real
+    // decision but a small fraction of a whole MOB, so a total-cost assertion
+    // would pass or fail on rounding rather than on the thing under test.
+    const shallow = (await priceKeys(baseMass({ features: [makeFeature("brise_soleil", { projection: 1.5, spacing: 6 })] })))
+      .get("brise_soleil")!;
+    const deep = (await priceKeys(baseMass({ features: [makeFeature("brise_soleil", { projection: 4, spacing: 2 })] })))
+      .get("brise_soleil")!;
+
+    // Three times the fins at nearly three times the depth.
+    expect(deep.quantity).toBeGreaterThan(shallow.quantity * 5);
+    expect(deep.amount).toBeGreaterThan(shallow.amount * 5);
+  });
+
+  it("charges a projecting balcony more than a recessed one, and takes area for the recess", async () => {
+    const projecting = baseMass({
+      floors: 4,
+      features: [makeFeature("balcony", { recessed: false, count: 4, fromFloor: 1, toFloor: 3 })],
+    });
+    const recessed = baseMass({
+      floors: 4,
+      features: [makeFeature("balcony", { recessed: true, count: 4, fromFloor: 1, toFloor: 3 })],
+    });
+
+    expect((await priceOf(projecting)).direct).toBeGreaterThan((await priceOf(recessed)).direct);
+    // A recessed balcony is carved out of the plate, so the building shrinks.
+    expect(grossArea(recessed)).toBeLessThan(grossArea(projecting));
+  });
+
+  it("gives every balcony a guard rail", async () => {
+    const lines = await priceKeys(baseMass({ features: [makeFeature("balcony", { count: 3 })] }));
+    expect(lines.get("guard_rail")?.quantity).toBeGreaterThan(0);
+  });
+
+  it("makes a loggia remove floor area and add soffit", async () => {
+    const plain = baseMass();
+    const withLoggia = baseMass({ features: [makeFeature("loggia", { width: 24, depth: 10 })] });
+    expect(grossArea(withLoggia)).toBeLessThan(grossArea(plain));
+    expect((await priceKeys(withLoggia)).get("loggia_soffit")?.quantity).toBeCloseTo(240, 4);
+  });
+
+  it("turns a feature corner into curtain wall on both elevations", async () => {
+    const lines = await priceKeys(
+      baseMass({ features: [makeFeature("feature_corner", { wrap: 18, fromFloor: 0, toFloor: 2 })] }),
+    );
+    // Two walls, three floors, 18ft of wrap at 14ft floor to floor.
+    expect(lines.get("curtain")?.quantity).toBeGreaterThanOrEqual(2 * 18 * 3 * 14);
+  });
+
+  it("cuts an atrium out of every floor above the ground and glazes the lid", async () => {
+    const plain = baseMass({ floors: 4 });
+    const withAtrium = baseMass({
+      floors: 4,
+      features: [makeFeature("atrium", { width: 40, depth: 30, floors: 4, skylight: true })],
+    });
+
+    // Three floors above ground lose the 1,200 SF void.
+    expect(grossArea(plain) - grossArea(withAtrium)).toBeCloseTo(3600, 0);
+    const lines = await priceKeys(withAtrium);
+    expect(lines.get("skylight")?.quantity).toBeCloseTo(1200, 4);
+    expect(lines.get("atrium_glazing")?.quantity).toBeGreaterThan(0);
+  });
+
+  it("prices a connector as structure, floor and envelope at once", async () => {
+    const lines = await priceKeys(baseMass({ features: [makeFeature("connector", { length: 40, width: 14 })] }));
+    expect(lines.get("connector_structure")?.quantity).toBeCloseTo(560, 4);
+    expect(lines.get("curtain")?.quantity).toBeGreaterThan(0);
+  });
+
+  it("prices a terrace with rail and planters", async () => {
+    const lines = await priceKeys(
+      baseMass({ features: [makeFeature("terrace", { area: 2000, railing: 140, planters: true })] }),
+    );
+    expect(lines.get("terrace_deck")?.quantity).toBeCloseTo(2000, 4);
+    expect(lines.get("guard_rail")?.quantity).toBeCloseTo(140, 4);
+    expect(lines.get("planter")?.quantity).toBeGreaterThan(0);
+  });
+
+  it("prices plaza paving by its grade", async () => {
+    const plain = await priceOf(baseMass({ features: [makeFeature("plaza", { grade: "plain", seatWall: 0 })] }));
+    const feature = await priceOf(baseMass({ features: [makeFeature("plaza", { grade: "feature", seatWall: 0 })] }));
+    expect(feature.direct).toBeGreaterThan(plain.direct);
+  });
+
+  it("prices a pergola by material", async () => {
+    const timber = await priceOf(baseMass({ features: [makeFeature("pergola", { material: "timber" })] }));
+    const aluminium = await priceOf(baseMass({ features: [makeFeature("pergola", { material: "aluminium" })] }));
+    expect(aluminium.direct).toBeGreaterThan(timber.direct);
+  });
+});
+
+describe("roof assembly and parapet", () => {
+  it("swaps the roof rate rather than stacking on it", async () => {
+    const membrane = await priceOf(baseMass({ roofAssembly: "membrane" }));
+    const green = await priceOf(baseMass({ roofAssembly: "green_intensive" }));
+
+    const membraneKeys = membrane.lines.map((l) => l.key);
+    const greenKeys = green.lines.map((l) => l.key);
+    // A green roof replaces the membrane line; it does not appear alongside it.
+    expect(greenKeys).toContain("roof_green_intensive");
+    expect(greenKeys).not.toContain("roof");
+    expect(membraneKeys).toContain("roof");
+    expect(green.direct).toBeGreaterThan(membrane.direct);
+  });
+
+  it("orders the roof assemblies sensibly", async () => {
+    const prices = await Promise.all(
+      (["membrane", "ballasted", "pv_ready", "green_extensive", "green_intensive"] as const).map(async (a) => ({
+        a,
+        direct: (await priceOf(baseMass({ roofAssembly: a }))).direct,
+      })),
+    );
+    const by = Object.fromEntries(prices.map((p) => [p.a, p.direct]));
+    expect(by.green_intensive).toBeGreaterThan(by.green_extensive);
+    expect(by.green_extensive).toBeGreaterThan(by.membrane);
+    expect(by.pv_ready).toBeGreaterThan(by.membrane);
+  });
+
+  it("only charges for parapet above the code minimum", async () => {
+    const standard = await priceOf(baseMass({ parapet: 3.5 }));
+    const tall = await priceOf(baseMass({ parapet: 8 }));
+    expect(standard.lines.some((l) => l.key === "parapet_wall")).toBe(false);
+    expect(tall.lines.some((l) => l.key === "parapet_wall")).toBe(true);
+    expect(tall.direct).toBeGreaterThan(standard.direct);
+  });
+});
+
+describe("material banding", () => {
+  it("splits the elevation into the materials it is actually clad in", () => {
+    const single = envelopeTakeoff(baseMass({ skin: "brick" }));
+    const banded = envelopeTakeoff(
+      baseMass({ skin: "brick", skinBands: [{ fromFloor: 1, skin: "metal_panel" }] }),
+    );
+
+    expect(Object.keys(single.opaqueBySkin)).toEqual(["brick"]);
+    expect(Object.keys(banded.opaqueBySkin).sort()).toEqual(["brick", "metal_panel"]);
+    // Total opaque area is unchanged; only how it is attributed.
+    expect(banded.opaque).toBeCloseTo(single.opaque, 4);
+  });
+
+  it("prices a banded elevation between its two materials", async () => {
+    const allBrick = await priceOf(baseMass({ skin: "brick" }));
+    const allMetal = await priceOf(baseMass({ skin: "metal_panel" }));
+    const banded = await priceOf(
+      baseMass({ skin: "brick", skinBands: [{ fromFloor: 1, skin: "metal_panel" }] }),
+    );
+    const [cheaper, dearer] = [allBrick.direct, allMetal.direct].sort((a, b) => a - b);
+    expect(banded.direct).toBeGreaterThan(cheaper);
+    expect(banded.direct).toBeLessThan(dearer);
   });
 });

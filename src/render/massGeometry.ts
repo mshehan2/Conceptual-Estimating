@@ -12,7 +12,7 @@
  */
 
 import * as THREE from "three";
-import { glassBand, punchedLayout, skinOf, wallHeight, type Mass } from "@/domain/massing";
+import { glassBand, punchedLayout, skinAtFloor, wallHeight, type Mass } from "@/domain/massing";
 import { massFootprint } from "@/domain/massing";
 import {
   facadeSegments,
@@ -98,6 +98,34 @@ export function facadeOpenings(
  * the roof and the terraces all follow from the same geometry the estimate
  * measured.
  */
+/**
+ * Consecutive floors sharing one cladding, within a band.
+ *
+ * Without this the renderer draws the whole wall in the base material while the
+ * estimate charges for two, which is the exact failure this codebase treats as
+ * the worst one available: money in the number for something nobody can see.
+ */
+function skinRuns(
+  m: Mass,
+  side: Facade,
+  fromFloor: number,
+  toFloor: number,
+): { fromFloor: number; toFloor: number; skin: SkinKey }[] {
+  const runs: { fromFloor: number; toFloor: number; skin: SkinKey }[] = [];
+  let start = fromFloor;
+  let current = skinAtFloor(m, side, fromFloor);
+
+  for (let floor = fromFloor + 1; floor <= toFloor; floor++) {
+    const skin = skinAtFloor(m, side, floor);
+    if (skin === current) continue;
+    runs.push({ fromFloor: start, toFloor: floor - 1, skin: current });
+    start = floor;
+    current = skin;
+  }
+  runs.push({ fromFloor: start, toFloor, skin: current });
+  return runs;
+}
+
 export interface MassBand {
   fromFloor: number;
   toFloor: number;
@@ -175,21 +203,29 @@ export function facadeBuilds(m: Mass): FacadeBuild[] {
     for (const segment of segments) {
       const midX = (segment.start[0] + segment.end[0]) / 2;
       const midZ = (segment.start[1] + segment.end[1]) / 2;
-      builds.push({
-        side: segment.side,
-        skin: skinOf(m, segment.side),
-        length: segment.length,
-        height: band.height,
-        baseY: band.baseY,
-        fromFloor: band.fromFloor,
-        floors,
-        openings: facadeOpenings(m, segment.side, segment.length, floors, band.fromFloor),
-        position: new THREE.Vector3(midX, band.baseY, midZ),
-        // atan2(nx, nz) turns the outward normal into a Y rotation, which is
-        // what lets a wall sit on a diagonal edge as happily as on a cardinal one.
-        rotationY: Math.atan2(segment.normal[0], segment.normal[1]),
-        segment,
-      });
+      // atan2(nx, nz) turns the outward normal into a Y rotation, which is what
+      // lets a wall sit on a diagonal edge as happily as on a cardinal one.
+      const rotationY = Math.atan2(segment.normal[0], segment.normal[1]);
+
+      // Split the wall again wherever the cladding changes, so a banded
+      // elevation is DRAWN in its two materials and not merely priced in them.
+      for (const run of skinRuns(m, segment.side, band.fromFloor, band.toFloor)) {
+        const runFloors = run.toFloor - run.fromFloor + 1;
+        const runBaseY = run.fromFloor * m.fth;
+        builds.push({
+          side: segment.side,
+          skin: run.skin,
+          length: segment.length,
+          height: runFloors * m.fth,
+          baseY: runBaseY,
+          fromFloor: run.fromFloor,
+          floors: runFloors,
+          openings: facadeOpenings(m, segment.side, segment.length, runFloors, run.fromFloor),
+          position: new THREE.Vector3(midX, runBaseY, midZ),
+          rotationY,
+          segment,
+        });
+      }
     }
   }
 
@@ -449,7 +485,7 @@ export function roofGeometry(m: Mass): {
       roofs.push(terrace);
     }
 
-    const parapet = bandFromRing(band.ring, top, 3.2, 0.9, -0.45);
+    const parapet = bandFromRing(band.ring, top, Math.max(1.5, m.parapet ?? 3.5), 0.9, -0.45);
     if (parapet) parapets.push(parapet);
   }
 

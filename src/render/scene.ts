@@ -19,6 +19,7 @@ import {
   groundMaterial,
   metalMaterial,
   mullionMaterial,
+  plantingMaterial,
   pavingMaterial,
   roofMaterial,
   scaledWallMaterial,
@@ -65,6 +66,10 @@ function featureMaterial(
       return glassMaterial(mode);
     case "storefront":
       return storefrontMaterial(mode);
+    case "paving":
+      return pavingMaterial(mode);
+    case "planting":
+      return plantingMaterial(mode);
     case "mullion":
       return mullionMaterial(mode);
     case "screen":
@@ -88,6 +93,8 @@ const MASK_BY_FEATURE_MATERIAL: Record<FeatureMaterialKey, MaskCategory> = {
   wall: "wall",
   screen: "trim",
   trim: "trim",
+  paving: "paving",
+  planting: "vegetation",
 };
 
 /** Label a mesh for the semantic mask pass. */
@@ -179,7 +186,7 @@ function buildMass(mass: Mass, options: SceneOptions, disposables: THREE.BufferG
   disposables.push(roof);
   const roofMesh = new THREE.Mesh(
     roof,
-    mass.context ? contextMaterial() : roofMaterial(mode, mass.roof !== "flat"),
+    mass.context ? contextMaterial() : roofMaterial(mode, mass.roof !== "flat", mass.roofAssembly ?? "membrane"),
   );
   roofMesh.castShadow = true;
   roofMesh.receiveShadow = true;

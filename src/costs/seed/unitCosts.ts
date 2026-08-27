@@ -144,6 +144,31 @@ const ROWS: Row[] = [
   ["roof_screen_panel", "Rooftop screen - solid panel", "SF", 46, 62, 85, "10 82 00", "B3010"],
   ["roof_screen_mesh", "Rooftop screen - mesh", "SF", 34, 46, 63, "10 82 00", "B3010"],
   ["cornice", "Cornice / parapet cap band", "LF", 42, 58, 80, "07 71 00", "B3010"],
+  ["brise_soleil", "Brise-soleil / fin array", "SF", 78, 108, 150, "10 71 13", "B2010"],
+  ["balcony_projecting", "Projecting balcony - deck, soffit & waterproofing", "SF", 118, 162, 225, "03 30 00", "B1010"],
+  ["balcony_recessed", "Recessed balcony - deck & waterproofing", "SF", 72, 100, 138, "07 18 00", "B1010"],
+  ["guard_rail", "Guard rail", "LF", 145, 200, 275, "05 73 00", "C2010"],
+  ["loggia_soffit", "Loggia soffit & finished recess", "SF", 58, 80, 110, "09 50 00", "B2010"],
+  ["atrium_glazing", "Atrium interior glazing & balustrade wall", "SF", 92, 126, 172, "08 44 00", "C1020"],
+  ["skylight", "Skylight / glazed roof", "SF", 145, 198, 272, "08 62 00", "B3020"],
+  ["connector_structure", "Link connector - structure, floor & envelope", "SF", 265, 360, 495, "05 12 00", "B1010"],
+  ["terrace_deck", "Roof terrace - paving, pedestals & waterproofing", "SF", 52, 72, 100, "07 18 00", "B3010"],
+  ["planter", "Planter & soil", "SF", 62, 86, 118, "32 93 00", "G2050"],
+  ["paving_unit", "Unit paver hardscape", "SF", 22, 30, 42, "32 14 00", "G2030"],
+  ["paving_feature", "Feature paving - stone or exposed aggregate", "SF", 38, 52, 72, "32 14 00", "G2030"],
+  ["seat_wall", "Seat wall", "LF", 185, 255, 350, "32 32 00", "G2040"],
+  ["pergola_timber", "Pergola - timber", "SF", 52, 72, 100, "06 15 00", "G2030"],
+  ["pergola_steel", "Pergola - steel", "SF", 68, 94, 130, "05 50 00", "G2030"],
+  ["pergola_aluminium", "Pergola - aluminium", "SF", 78, 108, 148, "05 50 00", "G2030"],
+
+  // ---- Roof assemblies ----
+  // Swapped on the roof plate rather than added to it, so choosing a green
+  // roof replaces the membrane rate instead of stacking on top of it.
+  ["roof_green_extensive", "Extensive green roof (sedum, 4in)", "SF", 28, 38, 52, "07 55 63", "B3010"],
+  ["roof_green_intensive", "Intensive green roof (planted, 12in+)", "SF", 55, 76, 105, "07 55 63", "B3010"],
+  ["roof_ballasted", "Ballasted membrane roof", "SF", 26, 35, 48, "07 54 00", "B3010"],
+  ["roof_pv_ready", "Membrane roof, PV-ready structure & conduit", "SF", 32, 44, 60, "07 54 00", "B3010"],
+  ["parapet_wall", "Parapet wall above 42in", "SF", 48, 66, 90, "04 21 00", "B2010"],
 
   // ---- $/GSF allowances ----
   // Scope a conceptual benchmark includes but a geometric takeoff cannot see.

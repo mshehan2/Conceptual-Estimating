@@ -9,6 +9,7 @@
 
 import * as THREE from "three";
 import type { SkinKey } from "@/markets/types";
+import type { RoofAssembly } from "@/domain/massing";
 import { skinTextures } from "./textures";
 
 export type RenderMode = "realistic" | "clay" | "program";
@@ -112,7 +113,28 @@ export function mullionMaterial(mode: RenderMode): THREE.Material {
   );
 }
 
-export function roofMaterial(mode: RenderMode, pitched: boolean): THREE.Material {
+export function roofMaterial(mode: RenderMode, pitched: boolean, assembly: RoofAssembly = "membrane"): THREE.Material {
+  // A green roof is the one assembly choice that changes the aerial view as
+  // much as it changes the number, so it has to read as planted.
+  if (!pitched && mode !== "clay" && (assembly === "green_extensive" || assembly === "green_intensive")) {
+    return remember(`roof-green-${assembly}-${mode}`, () =>
+      new THREE.MeshStandardMaterial({
+        color: assembly === "green_intensive" ? 0x4e7a3e : 0x6e8c52,
+        roughness: 0.98,
+        metalness: 0,
+        flatShading: true,
+      }),
+    );
+  }
+  if (!pitched && mode === "realistic" && assembly === "ballasted") {
+    return remember("roof-ballasted", () =>
+      new THREE.MeshStandardMaterial({ color: 0x9a9489, roughness: 1, metalness: 0 }),
+    );
+  }
+  return roofMaterialBase(mode, pitched);
+}
+
+function roofMaterialBase(mode: RenderMode, pitched: boolean): THREE.Material {
   if (mode === "clay") {
     return remember("clay-roof", () => new THREE.MeshStandardMaterial({ color: CLAY_ROOF, roughness: 0.94, metalness: 0 }));
   }
@@ -186,6 +208,16 @@ export function trimMaterial(mode: RenderMode, tint?: number): THREE.Material {
   );
 }
 
+/** Planting: terrace planters and green roofs. */
+export function plantingMaterial(mode: RenderMode): THREE.Material {
+  if (mode === "clay") {
+    return remember("clay-planting", () => new THREE.MeshStandardMaterial({ color: 0xe2dfd8, roughness: 0.95 }));
+  }
+  return remember(`planting-${mode}`, () =>
+    new THREE.MeshStandardMaterial({ color: mode === "program" ? 0x8fd14f : 0x5f7d47, roughness: 0.95, flatShading: true }),
+  );
+}
+
 /**
  * Storefront glazing for lobby volumes.
  *
@@ -234,8 +266,11 @@ export function metalMaterial(mode: RenderMode, tint?: number): THREE.Material {
       new THREE.MeshStandardMaterial({ color: new THREE.Color(color).multiplyScalar(0.6), roughness: 0.5, metalness: 0.4 }),
     );
   }
+  // Light anodised rather than dark: a fin array seen obliquely occludes into
+  // a continuous surface, and in a dark metal that surface reads as a blank
+  // wall rather than as the shading device it is.
   return remember("metal", () =>
-    new THREE.MeshStandardMaterial({ color: 0x4e565d, roughness: 0.38, metalness: 0.68, envMapIntensity: 1.1 }),
+    new THREE.MeshStandardMaterial({ color: 0x9aa3a9, roughness: 0.34, metalness: 0.72, envMapIntensity: 1.2 }),
   );
 }
 

@@ -11,6 +11,7 @@ import { TYPE_BY_ID } from "@/markets/registry";
 import { ALLOWANCE_KEYS } from "@/costs/seed/unitCosts";
 import type { Uom } from "@/costs/schema";
 import {
+  ROOF_ASSEMBLY_KEY,
   belowGradeTakeoff,
   envelopeTakeoff,
   floorPlates,
@@ -173,8 +174,18 @@ export function takeoff(
       // --- Envelope ---
       const env = envelopeTakeoff(m);
       add(q, "roof_struct", env.roofFlat + env.roofPitched);
-      add(q, "roof", env.roofFlat);
+      // The assembly is a swap on the plate, not an addition to it: a green
+      // roof replaces the membrane rather than sitting on top of its cost.
+      add(q, ROOF_ASSEMBLY_KEY[m.roofAssembly ?? "membrane"] ?? "roof", env.roofFlat);
       add(q, "roof_pitched", env.roofPitched);
+
+      // Parapet above the code minimum is real wall in the most visible place
+      // on the building, so it is measured rather than absorbed into the roof.
+      const parapetHeight = m.roofAssembly && m.roof === "flat" ? (m.parapet ?? 3.5) : (m.parapet ?? 3.5);
+      const extraParapet = Math.max(0, parapetHeight - 3.5);
+      if (m.roof === "flat" && extraParapet > 0) {
+        add(q, "parapet_wall", footprintPerimeter(massFootprint(m)) * extraParapet);
+      }
       add(q, "air_barrier", env.opaque);
       add(q, "ext_framing", env.opaque);
       for (const [skin, sf] of Object.entries(env.opaqueBySkin)) add(q, `wall_${skin}`, sf);

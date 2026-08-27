@@ -10,6 +10,7 @@
 import type { Uom } from "@/costs/schema";
 import type { FootprintKind } from "@/domain/footprint";
 import type { FeatureKind } from "@/domain/features";
+import type { RoofAssembly } from "@/domain/massing";
 
 /** Glazing strategy presets carried over from the massing engine. */
 export type GlazingPreset = "none" | "punched" | "strip" | "full";
@@ -78,6 +79,12 @@ export interface TypeDefaults {
   highRise?: boolean;
   /** True when the type is normally built below grade (excavation, shoring). */
   belowGrade?: boolean;
+  /** Roof assembly this type usually gets. Defaults to membrane. */
+  roofAssembly?: RoofAssembly;
+  /** Parapet height, feet. Defaults to 3.5. */
+  parapet?: number;
+  /** Vertical material banding: a different cladding from a floor upward. */
+  skinBands?: { fromFloor: number; skin: SkinKey }[];
 }
 
 /** A feature a building type seeds, with any parameters that differ from default. */

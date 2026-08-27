@@ -23,6 +23,15 @@ export type FeatureKind =
   | "bay"
   | "lobby"
   | "sunshade"
+  | "brise_soleil"
+  | "balcony"
+  | "loggia"
+  | "feature_corner"
+  | "atrium"
+  | "connector"
+  | "terrace"
+  | "plaza"
+  | "pergola"
   | "roof_screen"
   | "cornice";
 
@@ -106,12 +115,118 @@ export interface CorniceFeature extends FeatureBase {
   projection: number;
 }
 
+/** Vertical fin array or deep brise-soleil over a glazed elevation. */
+export interface BriseSoleilFeature extends FeatureBase {
+  kind: "brise_soleil";
+  /** Fraction of the segment covered, 0..1. */
+  coverage: number;
+  /** Fin depth out from the facade, feet. */
+  projection: number;
+  /** Fin spacing on centre, feet. */
+  spacing: number;
+  orientation: "vertical" | "horizontal";
+}
+
+/** Projecting or recessed balconies, repeated up the elevation. */
+export interface BalconyFeature extends FeatureBase {
+  kind: "balcony";
+  width: number;
+  /** Depth out from (or into) the facade, feet. */
+  projection: number;
+  fromFloor: number;
+  toFloor: number;
+  /** Recessed balconies cut into the plate instead of hanging off it. */
+  recessed: boolean;
+  /** Bays across the segment; 1 is a single balcony. */
+  count: number;
+}
+
+/** A recessed outdoor room cut into the elevation. */
+export interface LoggiaFeature extends FeatureBase {
+  kind: "loggia";
+  width: number;
+  /** How far it is cut into the plan, feet. */
+  depth: number;
+  fromFloor: number;
+  toFloor: number;
+}
+
+/** A fully glazed corner, wrapping two walls. */
+export interface FeatureCornerFeature extends FeatureBase {
+  kind: "feature_corner";
+  /** Wrap length onto each wall, feet. */
+  wrap: number;
+  fromFloor: number;
+  toFloor: number;
+}
+
+/** A multi-storey void cut through the plates, glazed above. */
+export interface AtriumFeature extends FeatureBase {
+  kind: "atrium";
+  width: number;
+  depth: number;
+  /** Floors the void passes through, from the ground up. */
+  floors: number;
+  /** Glazed roof over the void. */
+  skylight: boolean;
+}
+
+/** A link bridge between wings, or to a neighbouring building. */
+export interface ConnectorFeature extends FeatureBase {
+  kind: "connector";
+  /** Span, feet. */
+  length: number;
+  width: number;
+  floors: number;
+  /** Height above the base the connector starts at, feet. */
+  height: number;
+  glazed: boolean;
+}
+
+/** An occupiable roof deck, usually on a setback. */
+export interface TerraceFeature extends FeatureBase {
+  kind: "terrace";
+  /** Deck area, SF. */
+  area: number;
+  /** Guard rail run, feet. */
+  railing: number;
+  planters: boolean;
+}
+
+/** Entry plaza or patio hardscape at grade. */
+export interface PlazaFeature extends FeatureBase {
+  kind: "plaza";
+  width: number;
+  depth: number;
+  /** Paving grade drives the rate: plain, unit paver, or feature paving. */
+  grade: "plain" | "unit_paver" | "feature";
+  seatWall: number;
+}
+
+/** A shade structure over a patio or walkway. */
+export interface PergolaFeature extends FeatureBase {
+  kind: "pergola";
+  width: number;
+  projection: number;
+  height: number;
+  material: "timber" | "steel" | "aluminium";
+}
+
 export type Feature =
   | CanopyFeature
   | PorteCochereFeature
   | BayFeature
   | LobbyFeature
   | SunshadeFeature
+  | BriseSoleilFeature
+  | BalconyFeature
+  | LoggiaFeature
+  | FeatureCornerFeature
+  | AtriumFeature
+  | ConnectorFeature
+  | TerraceFeature
+  | PlazaFeature
+  | PergolaFeature
   | RoofScreenFeature
   | CorniceFeature;
 
@@ -141,6 +256,26 @@ export function makeFeature(kind: FeatureKind, over: Partial<Feature> = {}): Fea
       return { ...base, kind, segment: -1, height: 8, coverage: 0.6, material: "louver", ...over } as RoofScreenFeature;
     case "cornice":
       return { ...base, kind, segment: -1, depth: 2, projection: 1.5, ...over } as CorniceFeature;
+    case "brise_soleil":
+      // Spacing well above the projection, so the array reads as separate fins
+      // from an oblique view instead of closing into a solid plane.
+      return { ...base, kind, coverage: 0.75, projection: 2, spacing: 6, orientation: "vertical", ...over } as BriseSoleilFeature;
+    case "balcony":
+      return { ...base, kind, width: 10, projection: 6, fromFloor: 1, toFloor: 99, recessed: false, count: 4, ...over } as BalconyFeature;
+    case "loggia":
+      return { ...base, kind, width: 24, depth: 10, fromFloor: 0, toFloor: 0, ...over } as LoggiaFeature;
+    case "feature_corner":
+      return { ...base, kind, wrap: 18, fromFloor: 0, toFloor: 99, ...over } as FeatureCornerFeature;
+    case "atrium":
+      return { ...base, kind, segment: -1, width: 40, depth: 30, floors: 3, skylight: true, ...over } as AtriumFeature;
+    case "connector":
+      return { ...base, kind, length: 40, width: 14, floors: 1, height: 0, glazed: true, ...over } as ConnectorFeature;
+    case "terrace":
+      return { ...base, kind, segment: -1, area: 2000, railing: 140, planters: true, ...over } as TerraceFeature;
+    case "plaza":
+      return { ...base, kind, width: 60, depth: 40, grade: "unit_paver", seatWall: 40, ...over } as PlazaFeature;
+    case "pergola":
+      return { ...base, kind, width: 30, projection: 14, height: 10, material: "steel", ...over } as PergolaFeature;
   }
 }
 
@@ -150,9 +285,27 @@ export const FEATURE_LABELS: Record<FeatureKind, string> = {
   bay: "Projecting bay",
   lobby: "Glazed lobby volume",
   sunshade: "Sunshades",
+  brise_soleil: "Brise-soleil / fins",
+  balcony: "Balconies",
+  loggia: "Recessed loggia",
+  feature_corner: "Glazed feature corner",
+  atrium: "Atrium / lightwell",
+  connector: "Link connector",
+  terrace: "Roof terrace",
+  plaza: "Plaza / patio",
+  pergola: "Pergola",
   roof_screen: "Rooftop screen",
   cornice: "Cornice band",
 };
+
+/** Features that belong to the whole building rather than one wall. */
+export const WHOLE_BUILDING_FEATURES: ReadonlySet<FeatureKind> = new Set<FeatureKind>([
+  "sunshade",
+  "roof_screen",
+  "cornice",
+  "atrium",
+  "terrace",
+]);
 
 /** One line describing what a feature does to the number. */
 export const FEATURE_COST_NOTES: Record<FeatureKind, string> = {
@@ -163,6 +316,15 @@ export const FEATURE_COST_NOTES: Record<FeatureKind, string> = {
   sunshade: "Priced per linear foot of shade.",
   roof_screen: "Priced per SF of screen, by material.",
   cornice: "Priced per linear foot.",
+  brise_soleil: "Priced per SF of fin face, which rises steeply with depth and falls with spacing.",
+  balcony: "Deck, soffit and guard rail. A recessed balcony trades deck cost for lost floor area.",
+  loggia: "Removes floor area and exterior wall, adds soffit and a deeper reveal.",
+  feature_corner: "Swaps opaque wall for curtain wall around the corner on both elevations.",
+  atrium: "Removes floor plate on every level it passes, adds interior glazing and a skylight.",
+  connector: "A bridge is structure, envelope and floor all at once, per SF of deck.",
+  terrace: "Paving, guard rail and planters over an occupiable roof.",
+  plaza: "Hardscape by paving grade, plus seat wall by the foot.",
+  pergola: "Priced per SF of cover, by material.",
 };
 
 // ---------------------------------------------------------------------------
@@ -172,6 +334,12 @@ export const FEATURE_COST_NOTES: Record<FeatureKind, string> = {
 export interface FeatureQuantities {
   /** rate key -> quantity. */
   quantities: Record<string, number>;
+  /**
+   * Floor plate area removed on every level a void passes through, SF.
+   * An atrium is the obvious case: it is the one feature that makes a building
+   * smaller, and pretending otherwise overstates both the area and the fee.
+   */
+  plateDelta: number;
   /**
    * Net change to the flat wall area the envelope takeoff measured, SF.
    * Positive adds wall, negative removes it. A bay adds its returns and hides
@@ -201,8 +369,9 @@ export function featureTakeoff(feature: Feature, ctx: FeatureContext): FeatureQu
   const quantities: Record<string, number> = {};
   let wallDelta = 0;
   let glazingDelta = 0;
+  let plateDelta = 0;
 
-  if (feature.disabled) return { quantities, wallDelta, glazingDelta };
+  if (feature.disabled) return { quantities, wallDelta, glazingDelta, plateDelta };
 
   const segment = feature.segment >= 0 ? ctx.segments[feature.segment] : undefined;
   const segmentLength = segment?.length ?? ctx.roofPerimeter;
@@ -276,9 +445,106 @@ export function featureTakeoff(feature: Feature, ctx: FeatureContext): FeatureQu
       add(quantities, "cornice", ctx.roofPerimeter);
       break;
     }
+
+    case "brise_soleil": {
+      const run = segmentLength * Math.max(0, Math.min(1, feature.coverage));
+      const height = ctx.floors * ctx.floorToFloor;
+      // Fin face area: one fin per spacing, each the full height and depth.
+      const fins = Math.max(1, Math.floor(run / Math.max(0.75, feature.spacing)));
+      add(quantities, "brise_soleil", fins * feature.projection * (feature.orientation === "vertical" ? height : run / fins));
+      break;
+    }
+
+    case "balcony": {
+      const top = Math.min(feature.toFloor, ctx.floors - 1);
+      const levels = Math.max(0, top - feature.fromFloor + 1);
+      if (levels <= 0) break;
+      const count = Math.max(1, feature.count) * levels;
+      const deckArea = count * feature.width * feature.projection;
+
+      add(quantities, feature.recessed ? "balcony_recessed" : "balcony_projecting", deckArea);
+      add(quantities, "guard_rail", count * (feature.width + feature.projection * 2));
+
+      if (feature.recessed) {
+        // Cut into the plate: floor area lost, and the wall moves inward.
+        plateDelta -= deckArea;
+      } else {
+        // Hung off the face: three new edges of soffit and rail, no plate change.
+        wallDelta += count * feature.projection * 2 * 0.5;
+      }
+      break;
+    }
+
+    case "loggia": {
+      const top = Math.min(feature.toFloor, ctx.floors - 1);
+      const levels = Math.max(0, top - feature.fromFloor + 1);
+      if (levels <= 0) break;
+      const width = Math.min(feature.width, segmentLength);
+      const area = width * feature.depth * levels;
+
+      plateDelta -= area;
+      add(quantities, "loggia_soffit", area);
+      add(quantities, "guard_rail", width * levels);
+      // The recess adds two side walls where the flat facade used to be.
+      wallDelta += 2 * feature.depth * levels * ctx.floorToFloor;
+      break;
+    }
+
+    case "feature_corner": {
+      const top = Math.min(feature.toFloor, ctx.floors - 1);
+      const levels = Math.max(0, top - feature.fromFloor + 1);
+      if (levels <= 0) break;
+      // Wraps both walls at the corner, so twice the wrap length.
+      const area = 2 * feature.wrap * levels * ctx.floorToFloor;
+      add(quantities, "curtain", area);
+      glazingDelta += area;
+      break;
+    }
+
+    case "atrium": {
+      const levels = Math.max(1, Math.min(feature.floors, ctx.floors));
+      const void_ = feature.width * feature.depth;
+      // The ground floor keeps its area; every level above loses the void.
+      plateDelta -= void_ * Math.max(0, levels - 1);
+      add(quantities, "atrium_glazing", 2 * (feature.width + feature.depth) * levels * ctx.floorToFloor * 0.6);
+      add(quantities, "guard_rail", 2 * (feature.width + feature.depth) * Math.max(0, levels - 1));
+      if (feature.skylight) add(quantities, "skylight", void_);
+      break;
+    }
+
+    case "connector": {
+      const deck = feature.length * feature.width * Math.max(1, feature.floors);
+      add(quantities, "connector_structure", deck);
+      if (feature.glazed) {
+        add(quantities, "curtain", 2 * feature.length * feature.floors * ctx.floorToFloor);
+      }
+      add(quantities, "roof", feature.length * feature.width);
+      break;
+    }
+
+    case "terrace": {
+      add(quantities, "terrace_deck", Math.max(0, feature.area));
+      add(quantities, "guard_rail", Math.max(0, feature.railing));
+      if (feature.planters) add(quantities, "planter", Math.max(0, feature.area) * 0.12);
+      break;
+    }
+
+    case "plaza": {
+      const area = Math.max(0, feature.width * feature.depth);
+      const key =
+        feature.grade === "feature" ? "paving_feature" : feature.grade === "unit_paver" ? "paving_unit" : "site_patio";
+      add(quantities, key, area);
+      if (feature.seatWall > 0) add(quantities, "seat_wall", feature.seatWall);
+      break;
+    }
+
+    case "pergola": {
+      add(quantities, `pergola_${feature.material}`, feature.width * feature.projection);
+      break;
+    }
   }
 
-  return { quantities, wallDelta, glazingDelta };
+  return { quantities, wallDelta, glazingDelta, plateDelta };
 }
 
 /** Roll every feature on a mass into one set of adjustments. */
@@ -286,15 +552,17 @@ export function featuresTakeoff(features: Feature[], ctx: FeatureContext): Featu
   const quantities: Record<string, number> = {};
   let wallDelta = 0;
   let glazingDelta = 0;
+  let plateDelta = 0;
 
   for (const feature of features) {
     const result = featureTakeoff(feature, ctx);
     for (const [key, value] of Object.entries(result.quantities)) add(quantities, key, value);
     wallDelta += result.wallDelta;
     glazingDelta += result.glazingDelta;
+    plateDelta += result.plateDelta;
   }
 
-  return { quantities, wallDelta, glazingDelta };
+  return { quantities, wallDelta, glazingDelta, plateDelta };
 }
 
 /** Cardinal a feature faces, for describing it to an image model. */
