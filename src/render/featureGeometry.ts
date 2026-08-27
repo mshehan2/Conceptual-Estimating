@@ -13,7 +13,7 @@
 
 import * as THREE from "three";
 import type { Mass } from "@/domain/massing";
-import { massSegments, wallHeight } from "@/domain/massing";
+import { massFootprint, massSegments, wallHeight } from "@/domain/massing";
 import type {
   AtriumFeature,
   BalconyFeature,
@@ -403,20 +403,32 @@ function featureCornerGeometry(
 /** A skylight over an atrium. The void itself is interior, so only the lid shows. */
 function atriumGeometry(f: AtriumFeature, m: Mass): FeatureGeometry[] {
   if (!f.skylight) return [];
+
+  // The skylight used to be pinned to the mass origin. That is the centre of a
+  // rectangle and nothing at all on an L, where it straddles the notch — so
+  // the void came out of the priced floor plate while the glass over it sat
+  // above open air. Same failure as the terrace, same fix.
+  const fit = fitDeck(massFootprint(m), f.width + 1.6, f.depth + 1.6);
+  if (!fit) return [];
+  const cx = fit.x;
+  const cz = fit.z;
+  const width = Math.max(1, fit.w - 1.6);
+  const depth = Math.max(1, fit.d - 1.6);
+
   const y = m.floors * m.fth + 0.8;
-  const glass = new THREE.BoxGeometry(f.width, 0.5, f.depth);
-  glass.translate(0, y + 1.2, 0);
+  const glass = new THREE.BoxGeometry(width, 0.5, depth);
+  glass.translate(cx, y + 1.2, cz);
 
   const bars: THREE.BufferGeometry[] = [];
-  const bays = Math.max(2, Math.round(f.width / 8));
+  const bays = Math.max(2, Math.round(width / 8));
   for (let i = 0; i <= bays; i++) {
-    const bar = new THREE.BoxGeometry(0.4, 0.9, f.depth + 0.4);
-    bar.translate((i / bays - 0.5) * f.width, y + 1.2, 0);
+    const bar = new THREE.BoxGeometry(0.4, 0.9, depth + 0.4);
+    bar.translate(cx + (i / bays - 0.5) * width, y + 1.2, cz);
     bars.push(bar);
   }
   // A low upstand kerb so the skylight reads as sitting on the roof.
-  const kerb = new THREE.BoxGeometry(f.width + 1.6, 1.6, f.depth + 1.6);
-  kerb.translate(0, y + 0.3, 0);
+  const kerb = new THREE.BoxGeometry(width + 1.6, 1.6, depth + 1.6);
+  kerb.translate(cx, y + 0.3, cz);
   bars.push(kerb);
 
   return [

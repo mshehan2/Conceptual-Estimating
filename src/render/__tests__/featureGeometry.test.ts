@@ -330,6 +330,42 @@ describe("recesses open the wall in front of them", () => {
   });
 });
 
+describe("an atrium skylight lands on the roof", () => {
+  /**
+   * The skylight was pinned to the mass origin — the centre of a rectangle and
+   * nothing at all on an L, where it straddles the notch. The void was coming
+   * out of the priced floor plate while the glass over it sat above open air.
+   */
+  const SHAPES: [string, FootprintShape][] = [
+    ["rectangle", { kind: "rect" }],
+    ["L", { kind: "L", armW: 0.45, armD: 0.5, notch: "ne" }],
+    ["U", { kind: "U", armW: 0.3, courtD: 0.5, open: "S" }],
+    ["T", { kind: "T", stemW: 0.35, barD: 0.4, stem: "N" }],
+  ];
+
+  for (const [label, shape] of SHAPES) {
+    it(`sits over the building — ${label}`, () => {
+      const mass = massWith("atrium", { w: 220, d: 180, floors: 5, shape });
+      const plan = massFootprint(mass);
+      const parts = featureGeometries(mass);
+      expect(parts.length).toBeGreaterThan(0);
+      for (const part of parts) {
+        part.geometry.computeBoundingBox();
+        const b = part.geometry.boundingBox!;
+        for (const [px, pz] of [
+          [b.min.x, b.min.z], [b.max.x, b.min.z], [b.min.x, b.max.z], [b.max.x, b.max.z],
+          [(b.min.x + b.max.x) / 2, (b.min.z + b.max.z) / 2],
+        ] as const) {
+          expect(
+            pointInFootprint(plan, px, pz),
+            `${label}: ${part.material} reaches (${px.toFixed(0)},${pz.toFixed(0)})`,
+          ).toBe(true);
+        }
+      }
+    });
+  }
+});
+
 describe("a roof terrace lands on the roof", () => {
   /**
    * The deck centre used to be the mean of the outline's VERTICES, which is
