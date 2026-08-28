@@ -1,5 +1,15 @@
 #!/usr/bin/env node
 /**
+ * DEPRECATED. Use tools/destini-extract.py instead.
+ *
+ * This was written before anyone here had seen a real DESTINI snapshot, and it
+ * does not survive contact with one: it assumes a single flat table where the
+ * export is four joined on EstimateKey, its `csi` alias will not match
+ * Masterformat_L1/_L2, it has no concept of DistributedFeeAmount so it would
+ * carry fee into comp rates, it knows none of the Div 01 / 25-28 / 31-34
+ * folding rules, and it dodges the unreliable TotalCostPerUnit field by luck
+ * rather than by rule. Kept only until the Cost data import path is repointed.
+ *
  * Aggregate a folder of DESTINI exports into the two files BUD imports.
  *
  * A 250 MB snapshot of line-level history is not what a conceptual estimate
