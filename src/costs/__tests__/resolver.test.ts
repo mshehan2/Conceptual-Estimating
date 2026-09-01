@@ -129,9 +129,22 @@ describe("DESTINI export import", () => {
 });
 
 describe("indexing and escalation", () => {
-  it("compounds escalation over whole years", () => {
-    expect(escalationFactor("2026-01-01", "2027-01-01", 4)).toBeCloseTo(1.04, 3);
-    expect(escalationFactor("2026-01-01", "2028-01-01", 4)).toBeCloseTo(1.0816, 3);
+  it("escalates on Benchmark's cost index where the index reaches", () => {
+    // 2026 to 2027 is 141.6871 to 144.5209 on the index, which is 2.0%, and
+    // NOT the 4% stated rate. The template's index is the basis, and a flat
+    // rate assumption overstates a 2022 comp by roughly 3%.
+    expect(escalationFactor("2026-01-01", "2027-01-01", 4)).toBeCloseTo(144.5209 / 141.6871, 4);
+    expect(escalationFactor("2022-01-01", "2026-01-01", 4)).toBeCloseTo(141.6871 / 129.5106, 4);
+  });
+
+  it("carries the stated rate only for the span the index cannot reach", () => {
+    // The index stops at 2027 and a 2029 construction midpoint is a real case.
+    const toIndexEnd = 144.5209 / 129.5106;
+    expect(escalationFactor("2022-01-01", "2029-01-01", 5)).toBeCloseTo(toIndexEnd * 1.05 ** 2, 4);
+  });
+
+  it("falls back to the stated rate entirely outside the index", () => {
+    expect(escalationFactor("2031-01-01", "2033-01-01", 4)).toBeCloseTo(1.0816, 3);
   });
 
   it("never escalates backwards or without a midpoint", () => {

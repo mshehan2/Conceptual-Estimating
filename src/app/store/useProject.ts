@@ -10,7 +10,7 @@
 import { create } from "zustand";
 import type { Mass } from "@/domain/massing";
 import type { SchemeEstimate } from "@/domain/estimate";
-import { estimateScheme } from "@/domain/estimate";
+import { estimateScheme, DEFAULT_MARKUPS } from "@/domain/estimate";
 import { priceFeatures, type FeatureCost } from "@/domain/featureCost";
 import { takeoff } from "@/domain/takeoff";
 import {
@@ -137,6 +137,15 @@ function restore(): Project | null {
     const p = JSON.parse(raw) as Project;
     // A stored project from an older shape is better discarded than half-read.
     if (!p?.schemes?.length || !p.marketId) return null;
+
+    // Markups became an ordered compounding cascade. A project saved with the
+    // old six flat percentages cannot be converted faithfully, because those
+    // rates meant "percent of direct" and these mean "percent of the running
+    // subtotal". Take the Benchmark defaults rather than silently reinterpret
+    // someone's numbers as something they are not.
+    if (!Array.isArray(p.settings?.markups)) {
+      p.settings = { ...p.settings, markups: DEFAULT_MARKUPS.map((m) => ({ ...m })) };
+    }
     return p;
   } catch {
     return null;
@@ -168,7 +177,7 @@ export const useProject = create<ProjectState>((set, get) => {
           const est = await estimateScheme(t, resolver, {
             marketId: TYPE_BY_ID[scheme.typeId]?.marketId ?? project.marketId,
             typeId: scheme.typeId,
-            indirects: project.settings.indirects,
+            markups: project.settings.markups,
             adjustment: project.settings.adjustment,
             band: project.settings.band,
           });

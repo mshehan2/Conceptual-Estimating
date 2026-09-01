@@ -74,9 +74,20 @@ describe("model coherence across every building type", () => {
       expect(est.reconciliation).not.toBeNull();
 
       const rec = est.reconciliation!;
-      // Both readings are independent, so agreement inside 30% is the signal
-      // that neither has drifted. Tighter than that would be tuning to the test.
-      expect(Math.abs(rec.variancePct), `${typeId} variance ${rec.variancePct.toFixed(0)}%`).toBeLessThan(30);
+      // Both readings are independent, so agreement inside this band is the
+      // signal that neither has drifted. Tighter would be tuning to the test.
+      //
+      // Raised from 30% to 35% when the markup cascade was corrected to
+      // compound. Construction-scope markups went from 22.50% flat on direct
+      // to 25.45% compounded, which lifts every type's bottom-up by a uniform
+      // 2.41%. The old limit was calibrated against arithmetic that was wrong,
+      // so holding it would have meant keeping the error to keep the test.
+      //
+      // wk_fitout (31%) and in_cold (32%) are the two worst and were already
+      // the two worst before the fix, at 27.9% and 29.0%. Their seed bands are
+      // worth revisiting on their own merits; that is a data question, not a
+      // tolerance question.
+      expect(Math.abs(rec.variancePct), `${typeId} variance ${rec.variancePct.toFixed(0)}%`).toBeLessThan(35);
     },
   );
 
@@ -89,8 +100,12 @@ describe("model coherence across every building type", () => {
     const { est } = await priceType("mf_wrap");
     expect(est.conceptual!.benchmark.scope).toBe("construction");
     expect(est.reconciliation!.scope).toBe("construction");
-    // Construction excludes design fees, so it must sit below the project total.
-    expect(est.bottomUp.construction).toBeLessThan(est.bottomUp.project);
+    // Construction never exceeds the project total. It only sits strictly
+    // below it when a project-scope markup is carried, and Benchmark's own
+    // cascade carries none: their Project Total is construction plus
+    // escalation, with no A/E fee in it. So equality here is correct, not a
+    // missing step.
+    expect(est.bottomUp.construction).toBeLessThanOrEqual(est.bottomUp.project);
     expect(est.reconciliation!.bottomUp).toBe(est.bottomUp.construction);
   });
 

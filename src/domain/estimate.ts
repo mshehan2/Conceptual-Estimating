@@ -53,24 +53,78 @@ export function divisionForUniformat(uniformat: string | undefined): DivisionId 
 // Settings
 // ---------------------------------------------------------------------------
 
-/** Percentages of direct cost. */
-export interface IndirectSettings {
-  generalConditions: number;
-  fee: number;
-  contingency: number;
-  design: number;
-  bond: number;
-  insurance: number;
+/**
+ * One step in the markup cascade.
+ *
+ * Order matters, because each step is a percentage of the RUNNING SUBTOTAL and
+ * not of direct cost. That is how Benchmark's workbook computes it and it is
+ * not a rounding detail: on UPC 1 the eleven rows sum to 23.10%, and taking
+ * that flat against building and site gives $10,853,997 where compounding
+ * gives $11,960,110. Flat understates by 10.2%.
+ */
+export interface MarkupStep {
+  id: string;
+  label: string;
+  pct: number;
+  /** Design fees sit outside construction scope for market band comparison. */
+  scope: CostScope;
 }
 
-export const DEFAULT_INDIRECTS: IndirectSettings = {
-  generalConditions: 8,
-  fee: 4,
-  contingency: 8,
-  design: 6,
-  bond: 1,
-  insurance: 1.5,
-};
+/**
+ * Benchmark's standard cascade, in order.
+ *
+ * These are the rates from the UPC 1 model. The 8/21/2026 owner direction cut
+ * GC personnel to 5% and design contingency to 0% on the Hospital and Crescent
+ * models but not on UPC 1, which is exactly why this list belongs to the
+ * scheme rather than to the app.
+ */
+export const BENCHMARK_CASCADE: readonly MarkupStep[] = [
+  { id: "sdi", label: "SDI", pct: 1.25, scope: "construction" },
+  { id: "gc_personnel", label: "GC personnel", pct: 6.0, scope: "construction" },
+  { id: "gc_nonpersonnel", label: "GC non-personnel", pct: 1.0, scope: "construction" },
+  { id: "precon", label: "Preconstruction fees", pct: 0.25, scope: "construction" },
+  { id: "overhead", label: "Overhead and Procore", pct: 0.4, scope: "construction" },
+  { id: "permits", label: "Permits", pct: 2.0, scope: "construction" },
+  { id: "privilege_tax", label: "Business privilege tax", pct: 0, scope: "construction" },
+  { id: "gl_insurance", label: "GL insurance", pct: 1.2, scope: "construction" },
+  { id: "design_contingency", label: "Design contingency", pct: 5.0, scope: "construction" },
+  { id: "construction_contingency", label: "Construction contingency", pct: 3.0, scope: "construction" },
+  { id: "construction_fee", label: "Construction fees", pct: 3.0, scope: "construction" },
+  // Benchmark's cascade stops at construction cost: their Project Total is
+  // construction plus escalation, with no A/E fee in it. The bucket exists
+  // because other users price one and because Flad's comps are total project
+  // cost, but it defaults to zero rather than silently inflating an estimate.
+  { id: "design_fees", label: "Design fees", pct: 0, scope: "project" },
+] as const;
+
+export const DEFAULT_MARKUPS: MarkupStep[] = BENCHMARK_CASCADE.map((s) => ({ ...s }));
+
+export interface AppliedMarkup extends MarkupStep {
+  amount: number;
+  /** Subtotal this step was taken against, so the arithmetic can be read back. */
+  base: number;
+}
+
+/**
+ * Run the cascade. Each step compounds on what came before it.
+ *
+ * Returns every step with the base it was taken against, because "6% of what?"
+ * is the first question anyone asks of a markup schedule and the answer should
+ * be on the screen rather than in someone's head.
+ */
+export function applyCascade(base: number, steps: readonly MarkupStep[]): {
+  applied: AppliedMarkup[];
+  total: number;
+} {
+  let running = base;
+  const applied: AppliedMarkup[] = [];
+  for (const step of steps) {
+    const amount = running * (step.pct / 100);
+    applied.push({ ...step, amount, base: running });
+    running += amount;
+  }
+  return { applied, total: running - base };
+}
 
 export interface MarketAdjustment {
   /** Target location index; rates are scaled from their own stated basis. */
@@ -127,7 +181,7 @@ export interface BottomUpEstimate {
   lines: EstimateLine[];
   divisions: DivisionTotal[];
   direct: number;
-  indirects: { label: string; pct: number; amount: number; scope: CostScope }[];
+  indirects: AppliedMarkup[];
   indirectTotal: number;
   /**
    * Totals by scope, so a comparison against a published benchmark is
@@ -156,12 +210,12 @@ export function priceBottomUp(
   t: Takeoff,
   rates: Map<string, ResolvedRate>,
   opts: {
-    indirects?: IndirectSettings;
+    markups?: MarkupStep[];
     adjustment?: MarketAdjustment;
     band?: BandPoint;
   } = {},
 ): BottomUpEstimate {
-  const indirectSettings = opts.indirects ?? DEFAULT_INDIRECTS;
+  const markups = opts.markups ?? DEFAULT_MARKUPS;
   const adj = opts.adjustment ?? DEFAULT_ADJUSTMENT;
   const band = opts.band ?? "likely";
 
@@ -206,19 +260,19 @@ export function priceBottomUp(
 
   const direct = lines.reduce((a, l) => a + l.amount, 0);
 
-  const indirects: BottomUpEstimate["indirects"] = [
-    { label: "General conditions", pct: indirectSettings.generalConditions, scope: "construction" as CostScope },
-    { label: "Insurance", pct: indirectSettings.insurance, scope: "construction" as CostScope },
-    { label: "Bond", pct: indirectSettings.bond, scope: "construction" as CostScope },
-    { label: "Fee", pct: indirectSettings.fee, scope: "construction" as CostScope },
-    { label: "Design contingency", pct: indirectSettings.contingency, scope: "construction" as CostScope },
-    { label: "Design fees", pct: indirectSettings.design, scope: "project" as CostScope },
-  ].map((i) => ({ ...i, amount: direct * (i.pct / 100) }));
+  // The cascade compounds: each step is a percentage of the running subtotal,
+  // not of direct cost. Construction-scope steps run first and settle the
+  // contract sum; project-scope steps then compound on that.
+  const construction_steps = markups.filter((m) => m.scope !== "project");
+  const project_steps = markups.filter((m) => m.scope === "project");
 
-  const indirectTotal = indirects.reduce((a, i) => a + i.amount, 0);
-  const construction =
-    direct + indirects.filter((i) => i.scope === "construction").reduce((a, i) => a + i.amount, 0);
-  const project = direct + indirectTotal;
+  const constructionRun = applyCascade(direct, construction_steps);
+  const construction = direct + constructionRun.total;
+  const projectRun = applyCascade(construction, project_steps);
+
+  const indirects = [...constructionRun.applied, ...projectRun.applied];
+  const indirectTotal = constructionRun.total + projectRun.total;
+  const project = construction + projectRun.total;
   const total = project;
 
   const divisions: DivisionTotal[] = DIVISIONS.map((d) => {
@@ -392,7 +446,7 @@ export async function estimateScheme(
   opts: {
     marketId?: string;
     typeId?: string;
-    indirects?: IndirectSettings;
+    markups?: MarkupStep[];
     adjustment?: MarketAdjustment;
     band?: BandPoint;
   } = {},

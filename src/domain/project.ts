@@ -9,8 +9,8 @@
  */
 
 import type { RateOverride } from "@/costs/sources/overrideSource";
-import type { BandPoint, IndirectSettings, MarketAdjustment } from "./estimate";
-import { DEFAULT_ADJUSTMENT, DEFAULT_INDIRECTS } from "./estimate";
+import type { BandPoint, MarkupStep, MarketAdjustment } from "./estimate";
+import { DEFAULT_ADJUSTMENT, DEFAULT_MARKUPS } from "./estimate";
 import { makeMassForType, type Mass } from "./massing";
 import { defaultShape } from "./footprint";
 import { DEFAULT_CIRCULATION, fitFootprint, seedProgramForType, type CirculationSettings } from "./program";
@@ -46,7 +46,7 @@ export interface Scheme {
 }
 
 export interface ProjectSettings {
-  indirects: IndirectSettings;
+  markups: MarkupStep[];
   adjustment: MarketAdjustment;
   circulation: CirculationSettings;
   factors: TakeoffFactors;
@@ -88,7 +88,7 @@ const nextId = (prefix: string) => `${prefix}${Date.now().toString(36)}${(seq++)
 const now = () => new Date().toISOString();
 
 export const DEFAULT_SETTINGS: ProjectSettings = {
-  indirects: { ...DEFAULT_INDIRECTS },
+  markups: DEFAULT_MARKUPS.map((m) => ({ ...m })),
   adjustment: { ...DEFAULT_ADJUSTMENT },
   circulation: { ...DEFAULT_CIRCULATION },
   factors: { ...DEFAULT_FACTORS },

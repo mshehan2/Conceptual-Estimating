@@ -172,16 +172,25 @@ export function EstimatePanel() {
         <table className="table">
           <tbody>
             {bottomUp.indirects.map((i) => (
-              <tr key={i.label}>
+              <tr key={i.id}>
                 <td>
                   {i.label}
-                  <span className="label" style={{ marginLeft: 6 }}>{pct(i.pct, 1)}</span>
+                  <span className="label" style={{ marginLeft: 6 }}>{pct(i.pct, 2)}</span>
+                </td>
+                <td className="n label" title="Subtotal this step was taken against">
+                  {money(i.base)}
                 </td>
                 <td className="n">{money(i.amount)}</td>
               </tr>
             ))}
+            <tr>
+              <td className="label">Indirect total</td>
+              <td className="n"></td>
+              <td className="n">{money(bottomUp.indirectTotal)}</td>
+            </tr>
             <tr style={{ fontWeight: 600 }}>
               <td>Project total</td>
+              <td className="n"></td>
               <td className="n">{money(bottomUp.project)}</td>
             </tr>
           </tbody>
@@ -207,35 +216,39 @@ export function EstimatePanel() {
         </p>
       </Section>
 
-      <Section title="Markups" defaultOpen={false}>
-        <div className="grid-2">
-          {(
-            [
-              ["generalConditions", "General conditions"],
-              ["insurance", "Insurance"],
-              ["bond", "Bond"],
-              ["fee", "Fee"],
-              ["contingency", "Design contingency"],
-              ["design", "Design fees"],
-            ] as const
-          ).map(([key, label]) => (
-            <Field key={key} label={label}>
-              <NumberInput
-                value={project.settings.indirects[key]}
-                min={0}
-                max={60}
-                step={0.5}
-                suffix="%"
-                onChange={(v) => patchSettings({ indirects: { ...project.settings.indirects, [key]: v } })}
-              />
-            </Field>
+      <Section title="Markups" meta={`${project.settings.markups.length} steps`} defaultOpen={false}>
+        <p className="hint">
+          Each step is a percentage of the running subtotal, not of direct cost. That is how
+          Benchmark's workbook computes it, and the difference is not small: taken flat, these
+          rates land about 10% low.
+        </p>
+        <div className="stack mt-2" style={{ gap: 4 }}>
+          {project.settings.markups.map((step, i) => (
+            <div key={step.id} className="row" style={{ gap: 8, alignItems: "center" }}>
+              <span style={{ flex: 1, fontSize: 12.5 }}>{step.label}</span>
+              <span style={{ width: 74 }}>
+                <NumberInput
+                  value={step.pct}
+                  min={0}
+                  max={60}
+                  step={0.05}
+                  suffix="%"
+                  onChange={(v) => {
+                    const next = project.settings.markups.map((m, j) => (j === i ? { ...m, pct: v } : m));
+                    patchSettings({ markups: next });
+                  }}
+                />
+              </span>
+            </div>
           ))}
         </div>
         <p className="hint mt-2">
-          Design fees sit outside construction scope, so they are excluded when comparing against a
-          construction-scope market band.
+          Project-scope steps are excluded when comparing against a construction-scope market band.
+          The 8/21 owner direction cut GC personnel to 5% and design contingency to 0% on the
+          Hospital and Crescent models but not on UPC 1, so these belong to the scheme.
         </p>
       </Section>
+
     </>
   );
 }
