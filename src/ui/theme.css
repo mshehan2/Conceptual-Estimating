@@ -402,14 +402,16 @@ input[type="range"] { accent-color: var(--accent); width: 100%; }
 /* --- Tabs ------------------------------------------------------------------ */
 .tabs {
   display: flex;
+  /* Seven tabs need about 508px and the inspector is 371px, so they wrap onto
+     a second row. They used to scroll with the scrollbar hidden, which meant
+     Photoreal and Sheets were reachable by shift-scroll and by nothing else:
+     present in the DOM, clickable by a test runner, invisible to a person. */
+  flex-wrap: wrap;
   border-bottom: 1px solid var(--line-strong);
   background: var(--panel);
-  overflow-x: auto;
-  scrollbar-width: none;
 }
-.tabs::-webkit-scrollbar { display: none; }
 .tab {
-  padding: 10px 12px;
+  padding: 9px 11px;
   border: 0;
   border-bottom: 2px solid transparent;
   background: transparent;
