@@ -15,6 +15,7 @@ import { grossArea, wallHeight } from "@/domain/massing";
 import { useActiveEstimate, useActiveScheme, useProject } from "../store/useProject";
 import { Field, NumberInput, Section, Select, Segmented, Empty } from "@/ui/primitives";
 import { PlanEditor } from "./PlanEditor";
+import { DriverPanel } from "./DriverPanel";
 import { FeatureEditor } from "./FeatureEditor";
 import { num, pct } from "@/ui/format";
 import type { GlazingPreset, RoofKind, SkinKey } from "@/markets/types";
@@ -39,6 +40,7 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
   const patchFeature = useProject((s) => s.patchFeature);
   const removeFeature = useProject((s) => s.removeFeature);
   const duplicateFeature = useProject((s) => s.duplicateFeature);
+  const setDrivers = useProject((s) => s.setDrivers);
 
   if (!scheme) return <Empty>No scheme selected.</Empty>;
 
@@ -110,7 +112,11 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
         </div>
       </Section>
 
-      <Section title="Unit mix" meta={`${num(Math.round(cap.netProgram))} SF net`}>
+      {scheme.drivers && (
+        <DriverPanel chain={scheme.drivers} onChange={(c) => setDrivers(scheme.id, c)} />
+      )}
+
+      <Section title="Unit mix" meta={`${num(Math.round(cap.netProgram))} SF net`} defaultOpen={!scheme.drivers}>
         {units.length === 0 ? (
           <Empty>No program yet. Set a capacity target above.</Empty>
         ) : (

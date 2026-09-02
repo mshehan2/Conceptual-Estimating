@@ -11,6 +11,7 @@ import { create } from "zustand";
 import type { Mass } from "@/domain/massing";
 import type { SchemeEstimate } from "@/domain/estimate";
 import { estimateScheme, DEFAULT_MARKUPS } from "@/domain/estimate";
+import type { DriverChain } from "@/domain/drivers";
 import { priceFeatures, type FeatureCost } from "@/domain/featureCost";
 import { takeoff } from "@/domain/takeoff";
 import {
@@ -70,6 +71,7 @@ export interface ProjectState {
   setSchemeType: (id: string, typeId: string) => void;
   setSchemeCapacity: (id: string, target: number) => void;
   patchScheme: (id: string, patch: Partial<Scheme>) => void;
+  setDrivers: (schemeId: string, drivers: DriverChain) => void;
 
   // --- masses ---
   patchMass: (schemeId: string, massId: string, patch: Partial<Mass>) => void;
@@ -358,6 +360,8 @@ export const useProject = create<ProjectState>((set, get) => {
       ),
 
     patchScheme: (id, patch) => commit(mapScheme(id, (s) => ({ ...s, ...patch }))),
+
+    setDrivers: (schemeId, drivers) => commit(mapScheme(schemeId, (s) => ({ ...s, drivers }))),
 
     setMassShape: (schemeId, massId, shape, recenter = true) =>
       commit(

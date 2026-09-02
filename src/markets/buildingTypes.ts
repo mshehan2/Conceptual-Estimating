@@ -233,6 +233,33 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       skinBands: [{ fromFloor: 1, skin: "metal_panel" }],
     },
     plan: "L",
+    // Flad's benchmarking framework for PSH Hershey UPC 1, 8/18/2026 issue.
+    // The KPU counts, the 540 DGSF/KPU and the 1.5 gross factor are Flad's and
+    // fixed. The category shares are Flad's too, from the same framework.
+    driverChain: {
+      mode: "blended",
+      dgsfPerKpu: 540,
+      grossFactor: 1.5,
+      drivers: [
+        { id: "exam", label: "Exam rooms", count: 112, dgsfPer: 540, unit: "room", kpu: true, roomSf: 208 },
+        { id: "procedure", label: "Procedure rooms", count: 6, dgsfPer: 540, unit: "room", kpu: true, roomSf: 500 },
+        { id: "xray", label: "X-ray rooms", count: 2, dgsfPer: 540, unit: "room", kpu: true, roomSf: 600 },
+      ],
+      categories: [
+        { id: "dt", label: "Diagnostic & Treatment", share: 0.23 },
+        { id: "care_support", label: "Care Support", share: 0.07 },
+        { id: "lab", label: "Lab", share: 0.02 },
+        { id: "lab_support", label: "Lab Support", share: 0.01 },
+        { id: "office", label: "Office", share: 0.14 },
+        { id: "office_support", label: "Office Support", share: 0.07 },
+        { id: "formal_collab", label: "Formal Collaboration", share: 0.02 },
+        { id: "informal_collab", label: "Informal Collaboration", share: 0.02 },
+        { id: "building_support", label: "Building Support", share: 0.03 },
+        { id: "building_service", label: "Building Service", share: 0.02 },
+        { id: "mech", label: "Mechanical & Building Service", share: 0.06 },
+        { id: "circulation", label: "Circulation", share: 0, balance: true },
+      ],
+    },
     features: [
       { kind: "canopy", params: { width: 28, projection: 9, height: 13 } },
       { kind: "lobby", params: { width: 44, projection: 7, floors: 2 } },
@@ -270,6 +297,31 @@ export const BUILDING_TYPES: BuildingTypeDef[] = [
       { kind: "porte_cochere", params: { width: 34, projection: 20, height: 15 } },
       { kind: "lobby", params: { width: 32, projection: 6, floors: 1 } },
     ],
+    // An ASC is not one blended metric. Each piece is planned separately and
+    // argued separately, so each is its own driver: the ORs themselves, the
+    // sterile core that serves them, the PACU bays, and the front-of-house.
+    // Sterile core and support scale off the OR count; PACU off its own bays.
+    driverChain: {
+      mode: "component",
+      grossFactor: 1.35,
+      drivers: [
+        { id: "or", label: "Operating rooms", count: 4, dgsfPer: 650, unit: "OR", kpu: true, roomSf: 600 },
+        { id: "sterile_core", label: "Sterile core & processing", count: 4, dgsfPer: 320, unit: "per OR" },
+        { id: "pacu", label: "PACU & pre-op bays", count: 8, dgsfPer: 180, unit: "bay", roomSf: 120 },
+        { id: "asc_support", label: "Support: waiting, exam, admin", count: 4, dgsfPer: 900, unit: "per OR" },
+      ],
+      categories: [
+        { id: "or_platform", label: "Surgical platform", share: 0.26 },
+        { id: "sterile", label: "Sterile processing", share: 0.1 },
+        { id: "pacu", label: "PACU & pre-op", share: 0.14 },
+        { id: "clinical_support", label: "Clinical support", share: 0.08 },
+        { id: "waiting", label: "Waiting & reception", share: 0.07 },
+        { id: "office", label: "Office & admin", share: 0.06 },
+        { id: "building_service", label: "Building service", share: 0.03 },
+        { id: "mech", label: "Mechanical", share: 0.09 },
+        { id: "circulation", label: "Circulation", share: 0, balance: true },
+      ],
+    },
     efficiency: { low: 0.48, typical: 0.56, high: 0.62 },
     unitRefs: ["or_general", "or_specialty", "clin_prepop", "clin_sterile", "exam_op"],
     programMix: [

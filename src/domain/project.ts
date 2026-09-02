@@ -9,6 +9,7 @@
  */
 
 import type { RateOverride } from "@/costs/sources/overrideSource";
+import type { DriverChain } from "./drivers";
 import type { BandPoint, MarkupStep, MarketAdjustment } from "./estimate";
 import { DEFAULT_ADJUSTMENT, DEFAULT_MARKUPS } from "./estimate";
 import { makeMassForType, type Mass } from "./massing";
@@ -36,6 +37,12 @@ export interface Scheme {
   typeId: string;
   /** Capacity target in the type's own unit. */
   targetCapacity: number;
+  /**
+   * Program drivers for this scheme, seeded from the type and then editable.
+   * Flad fixes the KPU counts and the gross factor on a real job, so these
+   * have to be per-scheme rather than per-type.
+   */
+  drivers?: DriverChain;
   masses: Mass[];
   site: SiteQuantities;
   note: string;
@@ -121,6 +128,13 @@ export function makeScheme(
     name: opts.name ?? type?.label ?? "Scheme",
     typeId,
     targetCapacity: target,
+    // Seeded from the type, then the scheme's own. Editing a driver on one
+    // scheme must not change every other scheme of the same type.
+    drivers: type?.driverChain
+      ? { ...type.driverChain,
+          drivers: type.driverChain.drivers.map((d) => ({ ...d })),
+          categories: type.driverChain.categories.map((c) => ({ ...c })) }
+      : undefined,
     masses: [mass],
     site: { ...EMPTY_SITE, parking: parkingArea(typeId, target) },
     note: "",

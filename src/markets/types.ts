@@ -8,6 +8,7 @@
  */
 
 import type { Uom } from "@/costs/schema";
+import type { DriverChain } from "@/domain/drivers";
 import type { FootprintKind } from "@/domain/footprint";
 import type { FeatureKind } from "@/domain/features";
 import type { RoofAssembly } from "@/domain/massing";
@@ -150,6 +151,11 @@ export interface BuildingTypeDef {
    * rooms — 900 students is 900 x 165 GSF, not 900 classrooms.
    */
   gsfPerCapacity?: number;
+  /**
+   * How a count of rooms becomes a building. Present where the type has a
+   * planning framework behind it rather than a simple capacity target.
+   */
+  driverChain?: DriverChain;
   /** Typical project size range in capacity units, for sanity checks. */
   typicalCapacity?: { low: number; high: number };
   tags?: string[];
