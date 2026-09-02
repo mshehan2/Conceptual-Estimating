@@ -297,6 +297,18 @@ export function PhotorealPanel({
   );
 }
 
+/**
+ * Where the bundled pass-through lives, and whether we are somewhere it exists.
+ *
+ * It is dev-server middleware, so a built copy served from anywhere else does
+ * not have one. Saying that outright beats letting someone re-paste a good key
+ * at a wall: a hosted page cannot reach an image API however it is configured.
+ */
+const LOCAL_PROXY = "/ai-proxy?url={url}";
+const LOCAL =
+  typeof location !== "undefined" &&
+  /^(localhost|127\.0\.0\.1|\[::1\])$/.test(location.hostname);
+
 function ProviderSettings({ providerId }: { providerId: string }) {
   const provider = providerById(providerId)!;
   const stored = loadProviderConfigs()[providerId] ?? {};
@@ -355,15 +367,33 @@ function ProviderSettings({ providerId }: { providerId: string }) {
 
         <Field
           label="Proxy URL"
-          hint="Optional. Most image APIs refuse direct browser calls; point this at a pass-through if the request is blocked."
+          hint={
+            LOCAL
+              ? "These APIs send no CORS headers, so the browser blocks a direct call before it is sent. Use the bundled pass-through, or your own: {url} is replaced with the target."
+              : "Required. These APIs send no CORS headers, and a hosted copy cannot call an outside host at all — see below."
+          }
         >
           <input
             className="control"
             value={proxyUrl}
             onChange={(e) => setProxyUrl(e.target.value)}
-            placeholder="https://your-proxy.example.com/bfl"
+            placeholder={LOCAL_PROXY}
           />
         </Field>
+
+        {LOCAL && proxyUrl.trim() !== LOCAL_PROXY && (
+          <button className="btn sm" onClick={() => setProxyUrl(LOCAL_PROXY)}>
+            Use the local proxy
+          </button>
+        )}
+
+        {!LOCAL && (
+          <p className="hint" style={{ color: "var(--warn)" }}>
+            This copy is served from {location.host}, which forbids requests to outside hosts, so
+            no key or proxy will make a render work here. Run the app locally with{" "}
+            <code>npm run dev</code> — the pass-through it serves needs no setup.
+          </p>
+        )}
       </div>
 
       <div className="row mt-2" style={{ justifyContent: "flex-start", gap: 8 }}>

@@ -13,6 +13,8 @@
 
 import type { PassKind } from "../passes";
 import {
+  call,
+  via,
   DEFAULT_NEGATIVE,
   buildPrompt,
   inlineImage,
@@ -90,7 +92,12 @@ export class ReplicateProvider implements RenderProvider {
   }
 
   private base(): string {
-    return (this.config.proxyUrl?.trim() || DEFAULT_BASE).replace(/\/$/, "");
+    return DEFAULT_BASE;
+  }
+
+  /** Send this URL through the configured proxy, if there is one. */
+  private via(url: string): string {
+    return via(url, this.config.proxyUrl);
   }
 
   /**
@@ -140,7 +147,7 @@ export class ReplicateProvider implements RenderProvider {
         ? `${this.base()}/models/${version}/predictions`
         : `${this.base()}/predictions`;
 
-      const submit = await fetch(endpoint, {
+      const submit = await call(this.via(endpoint), {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -160,7 +167,9 @@ export class ReplicateProvider implements RenderProvider {
         await sleep(attempt === 0 ? 1500 : 2500, request.signal);
         attempt++;
 
-        const poll = await fetch(pollUrl, {
+        // Replicate hands back an absolute polling URL, which needs the
+        // proxy exactly as much as the submit did.
+        const poll = await call(this.via(pollUrl), {
           headers: { Authorization: `Bearer ${this.config.apiKey}` },
           signal: request.signal,
         });
@@ -173,7 +182,7 @@ export class ReplicateProvider implements RenderProvider {
           const url = Array.isArray(state.output) ? state.output[state.output.length - 1] : state.output;
           if (!url) throw new Error("Prediction succeeded with no output image");
           request.onProgress?.(0.95, "Downloading");
-          const image = await inlineImage(url, request.signal);
+          const image = await inlineImage(this.via(url), request.signal);
           this.status = "ready";
           request.onProgress?.(1, "Done");
           return {

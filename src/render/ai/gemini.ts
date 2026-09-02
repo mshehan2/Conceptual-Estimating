@@ -9,6 +9,8 @@
 
 import type { PassKind } from "../passes";
 import {
+  call,
+  via,
   buildPrompt,
   rawBase64,
   type ProviderConfig,
@@ -68,11 +70,11 @@ export class GeminiImageProvider implements RenderProvider {
     this.status = "working";
     this.error = null;
     const model = this.config.model ?? this.models[0].id;
-    const base = (this.config.proxyUrl?.trim() || DEFAULT_BASE).replace(/\/$/, "");
+    const base = DEFAULT_BASE;
 
     try {
       request.onProgress?.(0.15, "Rendering");
-      const response = await fetch(`${base}/models/${model}:generateContent`, {
+      const response = await call(via(`${base}/models/${model}:generateContent`, this.config.proxyUrl), {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": this.config.apiKey },
         body: JSON.stringify({

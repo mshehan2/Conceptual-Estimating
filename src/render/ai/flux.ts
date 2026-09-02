@@ -21,9 +21,11 @@ import type { PassKind } from "../passes";
 import {
   DEFAULT_NEGATIVE,
   buildPrompt,
+  call,
   inlineImage,
   rawBase64,
   sleep,
+  via,
   type ProviderConfig,
   type ProviderState,
   type RenderProvider,
@@ -89,8 +91,14 @@ export class FluxKontextProvider implements RenderProvider {
     return this.error;
   }
 
+  /** Where the provider lives. The proxy stands in front of it, not for it. */
   private base(): string {
-    return (this.config.proxyUrl?.trim() || DEFAULT_BASE).replace(/\/$/, "");
+    return DEFAULT_BASE;
+  }
+
+  /** Send this URL through the configured proxy, if there is one. */
+  private via(url: string): string {
+    return via(url, this.config.proxyUrl);
   }
 
   private headers(): Record<string, string> {
@@ -189,7 +197,7 @@ export class FluxKontextProvider implements RenderProvider {
     try {
       request.onProgress?.(0.05, "Submitting");
 
-      const submitResponse = await fetch(`${this.base()}/${model}`, {
+      const submitResponse = await call(this.via(`${this.base()}/${model}`), {
         method: "POST",
         headers: this.headers(),
         body: JSON.stringify(this.buildBody(request, model)),
@@ -212,7 +220,9 @@ export class FluxKontextProvider implements RenderProvider {
         await sleep(attempt === 0 ? 1200 : 2000, request.signal);
         attempt++;
 
-        const pollResponse = await fetch(pollUrl, {
+        // The polling URL is absolute and often on a regional host, so it
+        // needs the proxy every bit as much as the submit did.
+        const pollResponse = await call(this.via(pollUrl), {
           headers: { accept: "application/json", "x-key": this.config.apiKey },
           signal: request.signal,
         });
@@ -226,7 +236,9 @@ export class FluxKontextProvider implements RenderProvider {
         if (verdict.failure) throw new Error(verdict.failure);
 
         request.onProgress?.(0.95, "Downloading");
-        const image = await inlineImage(verdict.imageUrl!, request.signal);
+        // Same again for the signed result, which is served from a delivery
+        // host that is neither of the previous two.
+        const image = await inlineImage(this.via(verdict.imageUrl!), request.signal);
         this.status = "ready";
         request.onProgress?.(1, "Done");
 

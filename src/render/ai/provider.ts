@@ -93,7 +93,7 @@ export function rawBase64(dataUrl: string): string {
 
 /** Fetch a remote image and inline it, so the result survives a signed-URL expiry. */
 export async function inlineImage(url: string, signal?: AbortSignal): Promise<string> {
-  const response = await fetch(url, { signal });
+  const response = await call(url, { signal });
   if (!response.ok) throw new Error(`Could not fetch result image: ${response.status}`);
   const blob = await response.blob();
   return await new Promise<string>((resolve, reject) => {
@@ -102,6 +102,72 @@ export async function inlineImage(url: string, signal?: AbortSignal): Promise<st
     reader.onerror = () => reject(new Error("Could not read result image"));
     reader.readAsDataURL(blob);
   });
+}
+
+/**
+ * Route an absolute provider URL through a configured proxy.
+ *
+ * Every one of these APIs hands back absolute URLs mid-flight — a polling
+ * location on a regional host, then a signed image on a delivery host — and
+ * each is a separate cross-origin request. Proxying only the first call and
+ * then following those two directly is the same failure twice over, one step
+ * later, which is exactly what used to happen.
+ *
+ * Two forms are accepted. `{url}` anywhere in the proxy string is replaced
+ * with the encoded target, which works for any upstream host and is what the
+ * bundled dev proxy wants. Otherwise the proxy is treated as a stand-in for
+ * the provider's origin and the target's path is appended.
+ */
+export function via(url: string, proxyUrl?: string): string {
+  const proxy = proxyUrl?.trim();
+  if (!proxy) return url;
+  if (proxy.includes("{url}")) return proxy.replace("{url}", encodeURIComponent(url));
+  const path = url.replace(/^https?:\/\/[^/]+/, "");
+  return proxy.replace(/\/$/, "") + path;
+}
+
+/**
+ * Fetch, reporting a blocked request as the configuration problem it is.
+ *
+ * A cross-origin fetch the browser refuses to send rejects with a TypeError
+ * carrying no status and no body — "Failed to fetch". That reads like the
+ * provider turned us away, and it is the opposite: nothing ever left the
+ * machine. Saying so, and saying what to do about it, is the difference
+ * between a five-minute fix and an afternoon spent re-pasting a good key.
+ */
+export async function call(url: string, init: RequestInit = {}): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    if (err instanceof DOMException && err.name === "AbortError") throw err;
+    throw new Error(blockedMessage(url, err));
+  }
+}
+
+export function blockedMessage(url: string, err?: unknown): string {
+  // Guarded because this has to be readable from a test runner as well as a
+  // browser, and an explanation that throws while explaining is no use.
+  const here = typeof location !== "undefined" ? location : undefined;
+  const host = (() => {
+    try {
+      return new URL(url, here?.href ?? "http://localhost").host;
+    } catch {
+      return url;
+    }
+  })();
+
+  const sameOrigin = here != null && host === here.host;
+  const detail = err instanceof Error && err.message ? ` (${err.message})` : "";
+
+  if (sameOrigin) {
+    return `The proxy at ${host} did not answer${detail}. If this is the bundled dev proxy, the app has to be served by \`npm run dev\` or \`npm run preview\` for it to exist.`;
+  }
+
+  return (
+    `The browser blocked the request to ${host} before it was sent${detail}, so this is not your API key — no request reached the provider. ` +
+    `Image APIs send no CORS headers, and a hosted build additionally forbids calls to outside hosts. ` +
+    `Run the app locally with \`npm run dev\` and set Proxy URL to /ai-proxy?url={url}.`
+  );
 }
 
 export const sleep = (ms: number, signal?: AbortSignal) =>
