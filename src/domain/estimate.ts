@@ -13,8 +13,9 @@
  * `reconcile` reports it rather than hiding it behind a single figure.
  */
 
-import type { CostResolver, ResolvedRate } from "@/costs/resolver";
+import type { CostResolver, ResolvedBenchmark, ResolvedRate } from "@/costs/resolver";
 import { escalationFactor, locationFactor } from "@/costs/resolver";
+import { blendBenchmarks, blendRates, normalizeMix, type TypeMixEntry } from "@/costs/blend";
 import type { ConceptualBenchmark, Confidence, CostScope, Provenance, Uom } from "@/costs/schema";
 import { CONFIDENCE_RANK } from "@/costs/schema";
 import type { Takeoff } from "./takeoff";
@@ -439,6 +440,50 @@ export interface SchemeEstimate {
   reconciliation: Reconciliation | null;
 }
 
+/**
+ * Resolve rates and bands once per programme type, then blend by area share.
+ *
+ * Only bands every contributing type publishes survive the blend. A "per
+ * operating room" rate that only the surgery profile carries says nothing
+ * about a building that is two thirds medical office, and averaging it against
+ * nothing would quietly restate it as the whole building's rate.
+ */
+async function blendedLookup(
+  resolver: CostResolver,
+  keys: string[],
+  mix: TypeMixEntry[],
+  marketId: string | undefined,
+): Promise<[Map<string, ResolvedRate>, Map<string, ResolvedBenchmark>]> {
+  const parts = await Promise.all(
+    mix.map(async (entry) => ({
+      entry,
+      rates: await resolver.rates(keys, { marketId, typeId: entry.typeId }),
+      benchmarks: marketId
+        ? await resolver.conceptual({ marketId, typeId: entry.typeId })
+        : new Map<string, ResolvedBenchmark>(),
+    })),
+  );
+
+  const benchmarks = new Map<string, ResolvedBenchmark>();
+  const uoms = new Set(parts.flatMap((p) => [...p.benchmarks.keys()]));
+  for (const uom of uoms) {
+    const hits = parts
+      .map((p) => ({ entry: p.entry, resolved: p.benchmarks.get(uom) }))
+      .filter((h): h is { entry: TypeMixEntry; resolved: ResolvedBenchmark } => h.resolved != null);
+    if (hits.length !== parts.length) continue;
+    const benchmark = blendBenchmarks(
+      hits.map((h) => ({ entry: h.entry, benchmark: h.resolved.benchmark })),
+    );
+    if (!benchmark) continue;
+    benchmarks.set(uom, {
+      benchmark,
+      superseded: hits.flatMap((h) => [h.resolved.benchmark, ...h.resolved.superseded]),
+    });
+  }
+
+  return [blendRates(parts), benchmarks];
+}
+
 /** Price a takeoff both ways against whatever sources are registered. */
 export async function estimateScheme(
   t: Takeoff,
@@ -449,15 +494,29 @@ export async function estimateScheme(
     markups?: MarkupStep[];
     adjustment?: MarketAdjustment;
     band?: BandPoint;
+    /**
+     * The programmes inside this building, as shares of gross area. Given two
+     * or more distinct types, every rate and the conceptual band are blended
+     * across them rather than taken from `typeId` alone.
+     */
+    mix?: TypeMixEntry[];
   } = {},
 ): Promise<SchemeEstimate> {
   const keys = Object.keys(t.quantities);
-  const [rates, benchmarks] = await Promise.all([
-    resolver.rates(keys, { marketId: opts.marketId, typeId: opts.typeId }),
-    opts.marketId
-      ? resolver.conceptual({ marketId: opts.marketId, typeId: opts.typeId })
-      : Promise.resolve(new Map()),
-  ]);
+  // A stated mix is authoritative, even when it names a single programme: a
+  // scheme nominally typed as an office building whose only programme is a
+  // surgery centre should be priced as a surgery centre. At one full-weight
+  // entry the blend is a pass-through, so nothing is derived that need not be.
+  const mix = normalizeMix(opts.mix ?? []);
+
+  const [rates, benchmarks] = mix.length > 0
+    ? await blendedLookup(resolver, keys, mix, opts.marketId)
+    : await Promise.all([
+        resolver.rates(keys, { marketId: opts.marketId, typeId: opts.typeId }),
+        opts.marketId
+          ? resolver.conceptual({ marketId: opts.marketId, typeId: opts.typeId })
+          : Promise.resolve(new Map<string, ResolvedBenchmark>()),
+      ]);
 
   const bottomUp = priceBottomUp(t, rates, opts);
 

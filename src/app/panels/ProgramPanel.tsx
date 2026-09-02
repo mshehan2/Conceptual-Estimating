@@ -40,7 +40,8 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
   const patchFeature = useProject((s) => s.patchFeature);
   const removeFeature = useProject((s) => s.removeFeature);
   const duplicateFeature = useProject((s) => s.duplicateFeature);
-  const setDrivers = useProject((s) => s.setDrivers);
+  const setProgramBlocks = useProject((s) => s.setProgramBlocks);
+  const fitToProgram = useProject((s) => s.fitToProgram);
 
   if (!scheme) return <Empty>No scheme selected.</Empty>;
 
@@ -52,6 +53,7 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
   const circ = circulation(mass, project.settings.circulation);
   const units = programUnits(mass.program);
   const efficiencyBand = type.efficiency;
+  const typeGrossing = type.defaults.grossing ?? 1.35;
   const achieved = cap.efficiency;
 
   const capacityTone =
@@ -112,11 +114,16 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
         </div>
       </Section>
 
-      {scheme.drivers && (
-        <DriverPanel chain={scheme.drivers} onChange={(c) => setDrivers(scheme.id, c)} />
+      {scheme.programBlocks && (
+        <DriverPanel
+          blocks={scheme.programBlocks}
+          onChange={(b) => setProgramBlocks(scheme.id, b)}
+          boxGsf={scheme.masses.reduce((a, m) => a + grossArea(m), 0)}
+          onFit={() => fitToProgram(scheme.id)}
+        />
       )}
 
-      <Section title="Unit mix" meta={`${num(Math.round(cap.netProgram))} SF net`} defaultOpen={!scheme.drivers}>
+      <Section title="Unit mix" meta={`${num(Math.round(cap.netProgram))} SF net`} defaultOpen={!scheme.programBlocks?.length}>
         {units.length === 0 ? (
           <Empty>No program yet. Set a capacity target above.</Empty>
         ) : (
@@ -197,6 +204,36 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
             <NumberInput value={mass.rot} min={-180} max={180} step={5} onChange={(v) => patchMass(scheme.id, mass.id, { rot: v })} />
           </Field>
         </div>
+
+        <div className="grid-2 mt-2">
+          <Field
+            label="Grossing (gross / net)"
+            hint={
+              mass.grossing == null
+                ? `Type default ×${typeGrossing.toFixed(2)}`
+                : `Overridden — the type runs ×${typeGrossing.toFixed(2)}`
+            }
+          >
+            <NumberInput
+              value={grossingFactor(mass)}
+              min={1}
+              max={3}
+              step={0.05}
+              onChange={(v) => patchMass(scheme.id, mass.id, { grossing: v })}
+            />
+          </Field>
+        </div>
+
+        {mass.grossing != null && (
+          <p className="hint mt-1">
+            <button
+              className="btn ghost sm"
+              onClick={() => patchMass(scheme.id, mass.id, { grossing: null })}
+            >
+              Reset grossing
+            </button>
+          </p>
+        )}
 
         <div className="grid-2 mt-2">
           <Field label="Roof">

@@ -9,7 +9,8 @@
  */
 
 import type { RateOverride } from "@/costs/sources/overrideSource";
-import type { DriverChain } from "./drivers";
+import type { ProgramBlock } from "./drivers";
+import { blockFromChain } from "./drivers";
 import type { BandPoint, MarkupStep, MarketAdjustment } from "./estimate";
 import { DEFAULT_ADJUSTMENT, DEFAULT_MARKUPS } from "./estimate";
 import { makeMassForType, type Mass } from "./massing";
@@ -38,11 +39,13 @@ export interface Scheme {
   /** Capacity target in the type's own unit. */
   targetCapacity: number;
   /**
-   * Program drivers for this scheme, seeded from the type and then editable.
-   * Flad fixes the KPU counts and the gross factor on a real job, so these
-   * have to be per-scheme rather than per-type.
+   * Programmes in this building, seeded from the type and then editable. A
+   * medical office building with a surgery centre in it is one building and
+   * two programmes, planned by different arithmetic. Flad fixes the KPU counts
+   * and the gross factor on a real job, so these belong to the scheme rather
+   * than to the type.
    */
-  drivers?: DriverChain;
+  programBlocks?: ProgramBlock[];
   masses: Mass[];
   site: SiteQuantities;
   note: string;
@@ -130,10 +133,8 @@ export function makeScheme(
     targetCapacity: target,
     // Seeded from the type, then the scheme's own. Editing a driver on one
     // scheme must not change every other scheme of the same type.
-    drivers: type?.driverChain
-      ? { ...type.driverChain,
-          drivers: type.driverChain.drivers.map((d) => ({ ...d })),
-          categories: type.driverChain.categories.map((c) => ({ ...c })) }
+    programBlocks: type?.driverChain
+      ? [blockFromChain(nextId("pb"), type.label, type.driverChain, typeId)]
       : undefined,
     masses: [mass],
     site: { ...EMPTY_SITE, parking: parkingArea(typeId, target) },

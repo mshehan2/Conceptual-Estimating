@@ -12,7 +12,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "visual-check": "node tools/visual-check.mjs"
+    "visual-check": "node tools/visual-check.mjs",
+    "feature-check": "node tools/feature-check.mjs",
+    "program-check": "node tools/program-check.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

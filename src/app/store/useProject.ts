@@ -11,7 +11,7 @@ import { create } from "zustand";
 import type { Mass } from "@/domain/massing";
 import type { SchemeEstimate } from "@/domain/estimate";
 import { estimateScheme, DEFAULT_MARKUPS } from "@/domain/estimate";
-import type { DriverChain } from "@/domain/drivers";
+import { blockFromChain, resolveBlocks, type DriverChain, type ProgramBlock } from "@/domain/drivers";
 import { priceFeatures, type FeatureCost } from "@/domain/featureCost";
 import { takeoff } from "@/domain/takeoff";
 import {
@@ -26,7 +26,7 @@ import {
   type ProjectSettings,
   type Scheme,
 } from "@/domain/project";
-import { seedProgramForType, fitFootprint } from "@/domain/program";
+import { seedProgramForType, fitFootprint, fitFootprintToGross } from "@/domain/program";
 import { makeMassForType } from "@/domain/massing";
 import { copyFeature, makeFeature, type Feature, type FeatureKind } from "@/domain/features";
 import { TYPE_BY_ID, typesForMarket } from "@/markets/registry";
@@ -71,7 +71,9 @@ export interface ProjectState {
   setSchemeType: (id: string, typeId: string) => void;
   setSchemeCapacity: (id: string, target: number) => void;
   patchScheme: (id: string, patch: Partial<Scheme>) => void;
-  setDrivers: (schemeId: string, drivers: DriverChain) => void;
+  setProgramBlocks: (schemeId: string, programBlocks: ProgramBlock[]) => void;
+  /** Resize the primary mass to hold everything the programmes ask for. */
+  fitToProgram: (schemeId: string) => void;
 
   // --- masses ---
   patchMass: (schemeId: string, massId: string, patch: Partial<Mass>) => void;
@@ -148,6 +150,19 @@ function restore(): Project | null {
     if (!Array.isArray(p.settings?.markups)) {
       p.settings = { ...p.settings, markups: DEFAULT_MARKUPS.map((m) => ({ ...m })) };
     }
+
+    // A scheme used to carry one driver chain; it now carries a list of
+    // programmes. The single chain is the first programme, and unlike the
+    // markups this converts faithfully, so a saved project keeps whatever
+    // counts and support ratios someone had already argued their way to.
+    for (const s of p.schemes as (Scheme & { drivers?: DriverChain })[]) {
+      if (s.drivers && !s.programBlocks?.length) {
+        s.programBlocks = [
+          blockFromChain(`pb_${s.id}`, TYPE_BY_ID[s.typeId]?.label ?? "Programme", s.drivers, s.typeId),
+        ];
+      }
+      delete s.drivers;
+    }
     return p;
   } catch {
     return null;
@@ -176,12 +191,23 @@ export const useProject = create<ProjectState>((set, get) => {
             factors: project.settings.factors,
             site: scheme.site,
           });
+          // Where a scheme carries more than one programme, the rates and the
+          // conceptual band are blended across their types by area share: a
+          // surgery centre inside an office building is neither one nor the
+          // other, and pricing it as either is wrong by a knowable amount.
+          const combined = scheme.programBlocks?.length
+            ? resolveBlocks(scheme.programBlocks)
+            : null;
           const est = await estimateScheme(t, resolver, {
             marketId: TYPE_BY_ID[scheme.typeId]?.marketId ?? project.marketId,
             typeId: scheme.typeId,
             markups: project.settings.markups,
             adjustment: project.settings.adjustment,
             band: project.settings.band,
+            mix:
+              combined?.blocks
+                .filter((b) => b.typeId && b.bgsf > 0)
+                .map((b) => ({ typeId: b.typeId!, label: b.label, share: b.shareOfBgsf })) ?? [],
           });
           // Price each feature individually, for the editor's live readout.
           for (const mass of scheme.masses) {
@@ -361,7 +387,21 @@ export const useProject = create<ProjectState>((set, get) => {
 
     patchScheme: (id, patch) => commit(mapScheme(id, (s) => ({ ...s, ...patch }))),
 
-    setDrivers: (schemeId, drivers) => commit(mapScheme(schemeId, (s) => ({ ...s, drivers }))),
+    setProgramBlocks: (schemeId, programBlocks) =>
+      commit(mapScheme(schemeId, (s) => ({ ...s, programBlocks }))),
+
+    fitToProgram: (schemeId) =>
+      commit(
+        mapScheme(schemeId, (s) => {
+          const target = resolveBlocks(s.programBlocks ?? []).bgsf;
+          const primary = s.masses[0];
+          if (!(target > 0) || !primary) return s;
+          // The chain already grossed departmental area up to building gross,
+          // so this fits the box to that number directly.
+          const { w, d } = fitFootprintToGross(target, primary.typeId, primary.floors, 2.6, primary.shape);
+          return { ...s, masses: [{ ...primary, w, d }, ...s.masses.slice(1)] };
+        }),
+      ),
 
     setMassShape: (schemeId, massId, shape, recenter = true) =>
       commit(

@@ -258,13 +258,30 @@ export function fitFootprint(
   aspect = 2.6,
   shape?: FootprintShape,
 ): { w: number; d: number } {
+  const grossing = TYPE_BY_ID[typeId]?.defaults.grossing ?? 1.35;
+  return fitFootprintToGross(netArea * grossing, typeId, floors, aspect, shape);
+}
+
+/**
+ * Fit a footprint to a gross area that has already been grossed up.
+ *
+ * A driver chain states building gross directly — departmental area times its
+ * own gross factor — so running it back through the type's net-to-gross would
+ * charge the same allowance twice and produce a box a third too big.
+ */
+export function fitFootprintToGross(
+  gsf: number,
+  typeId: string,
+  floors: number,
+  aspect = 2.6,
+  shape?: FootprintShape,
+): { w: number; d: number } {
   const type = TYPE_BY_ID[typeId];
-  const grossing = type?.defaults.grossing ?? 1.35;
   const plan = shape ?? defaultShape(type?.plan ?? "rect");
   // Grow the box by whatever the shape carves out of it, so the plan holds the
   // same program whichever shape it is drawn in.
   const fill = shapeAreaRatio(plan, type?.defaults.footprint.w ?? 100, type?.defaults.footprint.d ?? 100);
-  const perFloor = Math.max(400, (netArea * grossing) / Math.max(1, floors) / fill);
+  const perFloor = Math.max(400, gsf / Math.max(1, floors) / fill);
   const targetDepth = type?.defaults.footprint.d ?? 66;
   const targetWidth = type?.defaults.footprint.w;
 

@@ -149,3 +149,99 @@ export function resolveChain(chain: DriverChain): DriverResult {
 export function atDgsfPerKpu(chain: DriverChain, dgsfPerKpu: number): DriverResult {
   return resolveChain({ ...chain, mode: "blended", dgsfPerKpu });
 }
+
+// ---------------------------------------------------------------------------
+// Program blocks
+// ---------------------------------------------------------------------------
+
+/**
+ * One programme inside a building.
+ *
+ * A medical office building with an ambulatory surgery centre in it is one
+ * building and two programmes, and they are planned by different arithmetic:
+ * the office side by exam rooms at a blended departmental area, the surgery
+ * side by operating rooms with their sterile core and PACU counted separately.
+ * Forcing both into one chain would mean picking one of those and losing the
+ * other, so a scheme carries a list.
+ *
+ * It is also how the campus models actually read. The Original Hospital is a
+ * surgical platform plus a bed tower, which is the same shape as this.
+ */
+export interface ProgramBlock {
+  id: string;
+  label: string;
+  /** Building type this programme came from, so rates can follow it. */
+  typeId?: string;
+  chain: DriverChain;
+}
+
+export interface BlockResult extends DriverResult {
+  id: string;
+  label: string;
+  typeId?: string;
+  /** Share of the whole building this programme accounts for. */
+  shareOfBgsf: number;
+}
+
+export interface CombinedResult {
+  blocks: BlockResult[];
+  kpu: number;
+  dgsf: number;
+  bgsf: number;
+  /** Every block's categories, merged by label and restated against the whole. */
+  categories: CategoryArea[];
+}
+
+/**
+ * Resolve every programme and combine them.
+ *
+ * Categories merge by label rather than by id, because "Circulation" means the
+ * same thing whichever programme it came from and a reader should see one
+ * circulation number for the building, not one per block. Shares are restated
+ * against combined building area so they still sum to the whole.
+ */
+export function resolveBlocks(blocks: ProgramBlock[]): CombinedResult {
+  const results = blocks.map((b) => {
+    const r = resolveChain(b.chain);
+    return { ...r, id: b.id, label: b.label, typeId: b.typeId, shareOfBgsf: 0 };
+  });
+
+  const bgsf = results.reduce((a, r) => a + r.bgsf, 0);
+  const dgsf = results.reduce((a, r) => a + r.dgsf, 0);
+  const kpu = results.reduce((a, r) => a + r.kpu, 0);
+  for (const r of results) r.shareOfBgsf = bgsf > 0 ? r.bgsf / bgsf : 0;
+
+  const merged = new Map<string, CategoryArea>();
+  for (const r of results) {
+    for (const c of r.categories) {
+      const key = c.label.toLowerCase();
+      const at = merged.get(key);
+      if (at) at.area += c.area;
+      else merged.set(key, { ...c, area: c.area });
+    }
+  }
+  const categories = [...merged.values()]
+    .map((c) => ({ ...c, share: bgsf > 0 ? c.area / bgsf : 0 }))
+    .sort((a, b) => b.area - a.area);
+
+  return { blocks: results, kpu, dgsf, bgsf, categories };
+}
+
+/** A block seeded from a building type's own chain, with its own identity. */
+export function blockFromChain(
+  id: string,
+  label: string,
+  chain: DriverChain,
+  typeId?: string,
+): ProgramBlock {
+  return {
+    id,
+    label,
+    typeId,
+    chain: {
+      ...chain,
+      drivers: chain.drivers.map((d) => ({ ...d })),
+      categories: chain.categories.map((c) => ({ ...c })),
+    },
+  };
+}
