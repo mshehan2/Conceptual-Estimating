@@ -15,11 +15,13 @@ import {
   FOOTPRINT_LABELS,
   composeFootprint,
   defaultShape,
+  dragEdgePreservingArea,
   facadeSegments,
   footprintArea,
   footprintPerimeter,
   holeRings,
   outerRing,
+  ringArea,
   toPolygonShape,
   type FootprintKind,
   type FootprintShape,
@@ -55,6 +57,19 @@ interface Drag {
   dx: number;
   dz: number;
   moved: boolean;
+  /**
+   * An edge drag moves a whole elevation along its normal and lets the plan
+   * grow the other way to hold its area. A vertex drag moves one corner.
+   */
+  edge?: {
+    ring: Point[];
+    /** Outward normal of the grabbed wall. */
+    nx: number;
+    nz: number;
+    /** Where the pointer started, projected onto that normal. */
+    start: number;
+    targetArea: number;
+  };
 }
 
 export function PlanEditor({ mass, onShape, onSize }: Props) {
@@ -124,10 +139,53 @@ export function PlanEditor({ mass, onShape, onSize }: Props) {
     (event.target as Element).setPointerCapture?.(event.pointerId);
   };
 
+  const onEdgeDown = (event: React.PointerEvent, index: number) => {
+    event.stopPropagation();
+    const plan = toPlan(event.clientX, event.clientY);
+    if (!plan) return;
+    const current = makeEditable();
+    const a = current[index];
+    const b = current[(index + 1) % current.length];
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len < 1e-6) return;
+    const nx = (b[1] - a[1]) / len;
+    const nz = -(b[0] - a[0]) / len;
+    setSelected(null);
+    setDrag({
+      index,
+      dx: 0,
+      dz: 0,
+      moved: false,
+      edge: {
+        ring: current,
+        nx,
+        nz,
+        start: plan[0] * nx + plan[1] * nz,
+        targetArea: ringArea(current),
+      },
+    });
+    (event.target as Element).setPointerCapture?.(event.pointerId);
+  };
+
   const onMove = (event: React.PointerEvent) => {
     if (!drag) return;
     const plan = toPlan(event.clientX, event.clientY);
     if (!plan) return;
+
+    // An elevation drag moves a whole wall along its normal and lets the plan
+    // grow the other way. It works off the ring captured at pointer-down, so
+    // the move is absolute rather than accumulating rounding every frame.
+    if (drag.edge) {
+      const { ring: from, nx, nz, start, targetArea } = drag.edge;
+      const distance = applySnap(plan[0] * nx + plan[1] * nz - start);
+      const next = dragEdgePreservingArea(from, drag.index, distance, targetArea);
+      // A drag that would collapse the plan holds the last good one.
+      if (next) {
+        setDrag({ ...drag, moved: true });
+        updatePoints(next, false);
+      }
+      return;
+    }
 
     const current = editable ? points : makeEditable();
     let x = applySnap(plan[0] - drag.dx);
@@ -285,6 +343,51 @@ export function PlanEditor({ mass, onShape, onSize }: Props) {
                 >
                   <title>Add a point here</title>
                 </circle>
+              );
+            })}
+
+            {/* Grab a whole elevation. Offset outside the wall so it does not
+                fight the add-a-point handle sitting on the midpoint. */}
+            {points.map((p, i) => {
+              const b = points[(i + 1) % points.length];
+              const len = Math.hypot(b[0] - p[0], b[1] - p[1]);
+              if (len < scale * 10) return null;
+              const nx = (b[1] - p[1]) / len;
+              const nz = -(b[0] - p[0]) / len;
+              const off = scale * 4.4;
+              const mx = (p[0] + b[0]) / 2 + nx * off;
+              const mz = (p[1] + b[1]) / 2 + nz * off;
+              const active = drag?.edge != null && drag.index === i;
+              return (
+                <g key={`edge-${i}`}>
+                  <line
+                    x1={(p[0] + b[0]) / 2}
+                    y1={-(p[1] + b[1]) / 2}
+                    x2={mx}
+                    y2={-mz}
+                    stroke="var(--accent)"
+                    strokeWidth={scale * 0.35}
+                    opacity={active ? 0.9 : 0.35}
+                    pointerEvents="none"
+                  />
+                  <rect
+                    x={mx - scale * 1.7}
+                    y={-mz - scale * 1.7}
+                    width={scale * 3.4}
+                    height={scale * 3.4}
+                    rx={scale * 0.5}
+                    fill={active ? "var(--accent)" : "var(--panel)"}
+                    stroke="var(--accent)"
+                    strokeWidth={scale * 0.45}
+                    style={{ cursor: "move" }}
+                    onPointerDown={(e) => onEdgeDown(e, i)}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <title>
+                      {`Drag this ${Math.round(len)}ft elevation in or out. The plan grows the other way to hold ${num(Math.round(ringArea(points)))} SF.`}
+                    </title>
+                  </rect>
+                </g>
               );
             })}
 

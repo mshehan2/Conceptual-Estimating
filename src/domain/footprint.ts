@@ -486,6 +486,78 @@ export function footprintBounds(f: Footprint): { minX: number; maxX: number; min
  * about the centroid — an approximation, but a stable one that never emits
  * geometry with a negative or inverted area.
  */
+/**
+ * Move one wall in or out, and let the building grow the other way to keep its
+ * area.
+ *
+ * This is how a planner actually thinks: a 10,000 SF building that is 100 by
+ * 100 does not become 5,000 SF when you decide it can only be 50 feet deep, it
+ * becomes 200 feet wide. The area is the fixed thing and the proportion is the
+ * question.
+ *
+ * Two steps. Push the grabbed edge along its own outward normal, which changes
+ * the area; then scale the whole plan along the PERPENDICULAR axis, about its
+ * centroid, by exactly the factor that puts the area back. Scaling
+ * perpendicular to the push cannot undo the push, so the depth you dragged to
+ * is the depth you keep.
+ *
+ * It works on any polygon, not just a rectangle. On an L or a U the adjacent
+ * walls slant to follow, which is the same thing pushing a face does in any
+ * modeller. Returns null rather than a degenerate plan when a drag would
+ * collapse or invert the shape.
+ */
+export function dragEdgePreservingArea(
+  ring: Point[],
+  edgeIndex: number,
+  distance: number,
+  targetArea: number,
+): Point[] | null {
+  const n = ring.length;
+  if (n < 3 || edgeIndex < 0 || edgeIndex >= n || targetArea <= 0) return null;
+
+  const [x0, z0] = ring[edgeIndex];
+  const [x1, z1] = ring[(edgeIndex + 1) % n];
+  const dx = x1 - x0;
+  const dz = z1 - z0;
+  const len = Math.hypot(dx, dz);
+  if (len < 1e-6) return null;
+
+  // Outward normal for a counter-clockwise ring.
+  const nx = dz / len;
+  const nz = -dx / len;
+
+  const moved = ring.map((p, i) =>
+    i === edgeIndex || i === (edgeIndex + 1) % n
+      ? ([p[0] + nx * distance, p[1] + nz * distance] as Point)
+      : p,
+  );
+
+  const area = ringArea(moved);
+  if (area < 1e-6) return null;
+  // A push that turns the plan inside out is not a smaller building.
+  if (Math.sign(signedArea(moved)) !== Math.sign(signedArea(ring))) return null;
+
+  const scale = targetArea / area;
+  if (!Number.isFinite(scale) || scale <= 0) return null;
+
+  // Scale along the axis perpendicular to the push, about the centroid, so the
+  // wall that was dragged stays where it was put.
+  const px = -nz;
+  const pz = nx;
+  const cx = moved.reduce((a, p) => a + p[0], 0) / n;
+  const cz = moved.reduce((a, p) => a + p[1], 0) / n;
+
+  const out = moved.map(([x, z]) => {
+    const ox = x - cx;
+    const oz = z - cz;
+    const along = ox * px + oz * pz;
+    const grow = along * (scale - 1);
+    return [x + px * grow, z + pz * grow] as Point;
+  });
+
+  return out;
+}
+
 export function insetRing(ring: Point[], distance: number): Point[] {
   if (distance <= 0 || ring.length < 3) return ring.slice();
 
