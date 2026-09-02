@@ -126,8 +126,8 @@ const ROWS: Row[] = [
   ["fitout_gym", "Gymnasium fit-out", "SF", 42, 58, 78, "09 00 00", "C3000"],
   ["fitout_pool", "Natatorium fit-out", "SF", 165, 222, 300, "09 00 00", "C3000"],
   ["fitout_warehouse", "Warehouse / high-bay fit-out", "SF", 6, 9, 14, "09 00 00", "C3000"],
-  ["fitout_freezer", "Freezer envelope & refrigeration", "SF", 105, 142, 190, "13 21 00", "C3000"],
-  ["fitout_cooler", "Cooler envelope & refrigeration", "SF", 72, 98, 132, "13 21 00", "C3000"],
+  ["fitout_freezer", "Freezer refrigeration, liner & underslab heat", "SF", 78, 105, 141, "13 21 00", "C3000"],
+  ["fitout_cooler", "Cooler refrigeration, liner & underslab heat", "SF", 53, 72, 97, "13 21 00", "C3000"],
 
   // ---- Architectural features ----
   // The moves that make a building read as designed. Each is priced from the

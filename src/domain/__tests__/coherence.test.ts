@@ -22,31 +22,8 @@ import { estimateScheme } from "../estimate";
 import { BUILDING_TYPES, TYPE_BY_ID } from "@/markets/registry";
 
 /** A plausible project size and height for each type. */
-const SCENARIOS: Record<string, { target: number; floors: number }> = {
-  sl_il: { target: 120, floors: 4 }, sl_al: { target: 80, floors: 3 },
-  sl_mc: { target: 40, floors: 1 }, sl_snf: { target: 90, floors: 2 },
-  sl_ccrc: { target: 220, floors: 4 }, sl_affordable: { target: 80, floors: 4 },
-  hc_mob: { target: 60_000, floors: 3 }, hc_asc: { target: 4, floors: 1 },
-  hc_clinic: { target: 20, floors: 1 }, hc_bedtower: { target: 120, floors: 6 },
-  hc_ed: { target: 24, floors: 1 }, hc_imaging: { target: 4, floors: 1 },
-  hc_behavioral: { target: 48, floors: 2 },
-  he_residence: { target: 400, floors: 5 }, he_academic: { target: 60_000, floors: 3 },
-  he_lab: { target: 80_000, floors: 3 }, he_student_life: { target: 50_000, floors: 2 },
-  he_athletics: { target: 90_000, floors: 2 }, he_library: { target: 70_000, floors: 3 },
-  mf_garden: { target: 100, floors: 3 }, mf_wrap: { target: 200, floors: 5 },
-  mf_podium: { target: 180, floors: 6 }, mf_highrise: { target: 250, floors: 18 },
-  mf_affordable: { target: 90, floors: 4 }, mf_townhome: { target: 40, floors: 3 },
-  hp_select: { target: 120, floors: 5 }, hp_extended: { target: 110, floors: 4 },
-  hp_full: { target: 250, floors: 8 }, hp_boutique: { target: 90, floors: 6 },
-  wk_shell: { target: 90_000, floors: 4 }, wk_fitout: { target: 30_000, floors: 1 },
-  wk_flex: { target: 60_000, floors: 1 },
-  in_warehouse: { target: 250_000, floors: 1 }, in_manufacturing: { target: 120_000, floors: 1 },
-  in_cold: { target: 150_000, floors: 1 },
-  cv_k12: { target: 900, floors: 2 }, cv_worship: { target: 700, floors: 1 },
-  cv_municipal: { target: 30_000, floors: 2 }, cv_recreation: { target: 60_000, floors: 1 },
-  pk_garage: { target: 400, floors: 5 }, pk_below: { target: 200, floors: 2 },
-  pk_surface: { target: 300, floors: 1 },
-};
+import { SCENARIOS } from "./coherenceScenarios";
+
 
 const resolver = new CostResolver().register(new SeedCostSource());
 
@@ -77,17 +54,17 @@ describe("model coherence across every building type", () => {
       // Both readings are independent, so agreement inside this band is the
       // signal that neither has drifted. Tighter would be tuning to the test.
       //
-      // Raised from 30% to 35% when the markup cascade was corrected to
-      // compound. Construction-scope markups went from 22.50% flat on direct
-      // to 25.45% compounded, which lifts every type's bottom-up by a uniform
-      // 2.41%. The old limit was calibrated against arithmetic that was wrong,
-      // so holding it would have meant keeping the error to keep the test.
+      // The binding case is wk_fitout at 31%, and it is not a defect: its
+      // bottom-up sits INSIDE the $110-200 band at $196, just well above the
+      // $150 likely, because the seeded mix of open office, private office and
+      // seminar rooms with full allowances describes a well-appointed tenant
+      // improvement rather than a median one. Nothing is double counted; its
+      // scopeMode is interiors and Shell reads $0.9/SF.
       //
-      // wk_fitout (31%) and in_cold (32%) are the two worst and were already
-      // the two worst before the fix, at 27.9% and 29.0%. Their seed bands are
-      // worth revisiting on their own merits; that is a data question, not a
-      // tolerance question.
-      expect(Math.abs(rec.variancePct), `${typeId} variance ${rec.variancePct.toFixed(0)}%`).toBeLessThan(35);
+      // 35% briefly, when the markup cascade was corrected to compound and
+      // in_cold read 32%. in_cold was a real double count and is fixed, so
+      // this comes back down.
+      expect(Math.abs(rec.variancePct), `${typeId} variance ${rec.variancePct.toFixed(0)}%`).toBeLessThan(33);
     },
   );
 
@@ -134,5 +111,30 @@ describe("model coherence across every building type", () => {
     const warehouse = await resolver.rates(["allow_medgas"], { typeId: "in_warehouse" });
     expect(hospital.get("allow_medgas")!.line.likely).toBeGreaterThan(0);
     expect(warehouse.get("allow_medgas")!.line.likely).toBe(0);
+  });
+});
+
+describe("cold storage prices its envelope once", () => {
+  /**
+   * The freezer and cooler rates used to be labelled "envelope & refrigeration"
+   * while the mass separately priced an insulated metal panel skin as its
+   * shell. On a 380x260x40 box that skin is $21.8 per SF of floor, and it was
+   * being paid for twice. Bottom-up read $375/SF construction against a band
+   * whose high was $350: above the range the benchmark says is possible.
+   */
+  it("keeps the insulated skin out of the freezer fit-out rate", async () => {
+    const { est, takeoff: t } = await priceType("in_cold");
+    const rec = est.reconciliation!;
+    // Inside the band, not merely close to it.
+    expect(est.bottomUp.construction / t.gsf).toBeLessThan(rec.conceptualHigh / t.gsf);
+    expect(Math.abs(rec.variancePct)).toBeLessThan(25);
+  });
+
+  it("still carries a real insulated envelope in the shell", async () => {
+    // The correction must not have deleted the envelope, only stopped charging
+    // for it twice.
+    const { est } = await priceType("in_cold");
+    const shell = est.bottomUp.divisions.find((d) => d.label === "Shell");
+    expect(shell!.amount).toBeGreaterThan(0);
   });
 });
