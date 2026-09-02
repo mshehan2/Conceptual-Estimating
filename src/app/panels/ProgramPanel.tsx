@@ -114,9 +114,9 @@ export function ProgramPanel({ selectedMassId }: { selectedMassId: string | null
         </div>
       </Section>
 
-      {scheme.programBlocks && (
+      {(scheme.programBlocks?.length || type.driverChain) && (
         <DriverPanel
-          blocks={scheme.programBlocks}
+          blocks={scheme.programBlocks ?? []}
           onChange={(b) => setProgramBlocks(scheme.id, b)}
           boxGsf={scheme.masses.reduce((a, m) => a + grossArea(m), 0)}
           onFit={() => fitToProgram(scheme.id)}

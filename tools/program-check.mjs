@@ -66,7 +66,12 @@ async function main() {
     if (m.type() === "error" && !m.text().includes("favicon")) errors.push(m.text());
   });
 
-  await page.addInitScript(() => localStorage.clear());
+  await page.addInitScript(() => {
+    if (!sessionStorage.getItem("__pc_booted")) {
+      localStorage.clear();
+      sessionStorage.setItem("__pc_booted", "1");
+    }
+  });
   await page.goto(URL, { waitUntil: "networkidle" });
   await page.waitForTimeout(5000);
 
@@ -155,6 +160,49 @@ async function main() {
     await page.waitForTimeout(1200);
     check("resetting restores the type's own factor",
       (await grossing.first().inputValue()) === was, `back to ${was}`);
+  }
+
+  // The state a returning user is actually in.
+  //
+  // Every check above ran against a freshly seeded scheme, because the run
+  // starts by clearing storage. That is the one state a returning user is
+  // never in, and it hid a real defect: a project saved before driver chains
+  // existed carries no programmes, and the panel that offers to add one was
+  // conditioned on the programmes being there. No amount of clicking would
+  // produce it. So this replays a legacy save.
+  const legacy = await page.evaluate(() => {
+    const raw = localStorage.getItem("bud.project.v1");
+    if (!raw) return false;
+    const p = JSON.parse(raw);
+    for (const s of p.schemes) {
+      delete s.programBlocks;
+      delete s.drivers;
+    }
+    localStorage.setItem("bud.project.v1", JSON.stringify(p));
+    return true;
+  });
+  check("a legacy save could be staged", legacy);
+
+  await page.reload({ waitUntil: "networkidle" });
+  await page.waitForTimeout(5000);
+  await page.getByRole("tab", { name: "Program" }).click();
+  await page.waitForTimeout(800);
+
+  const restored = await panelText(page);
+  check("a restored project still shows its programmes",
+    restored.includes("Program drivers") || restored.includes("Programmes"));
+  check("and can still have a surgery centre added",
+    (await page.getByLabel("Add a programme").count()) > 0);
+
+  if (await page.getByLabel("Add a programme").count()) {
+    await settle(page);
+    const wasCost = value((await kpis(page))["Project total"] ?? "0");
+    await page.getByLabel("Add a programme").selectOption("hc_asc");
+    await page.waitForTimeout(1500);
+    await settle(page);
+    const nowCost = value((await kpis(page))["Project total"] ?? "0");
+    check("adding one to a restored project moves the estimate", nowCost !== wasCost,
+      `$${wasCost.toLocaleString()} → $${nowCost.toLocaleString()}`);
   }
 
   check("no console or page errors", errors.length === 0, errors.slice(0, 3).join(" | "));

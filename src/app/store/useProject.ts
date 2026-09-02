@@ -155,11 +155,19 @@ function restore(): Project | null {
     // programmes. The single chain is the first programme, and unlike the
     // markups this converts faithfully, so a saved project keeps whatever
     // counts and support ratios someone had already argued their way to.
+    //
+    // A scheme saved before driver chains existed at all has neither field.
+    // It still gets its type's chain, because the alternative is a restored
+    // project where the programme panel simply is not there and no amount of
+    // clicking will produce it.
     for (const s of p.schemes as (Scheme & { drivers?: DriverChain })[]) {
-      if (s.drivers && !s.programBlocks?.length) {
-        s.programBlocks = [
-          blockFromChain(`pb_${s.id}`, TYPE_BY_ID[s.typeId]?.label ?? "Programme", s.drivers, s.typeId),
-        ];
+      if (!s.programBlocks?.length) {
+        const chain = s.drivers ?? TYPE_BY_ID[s.typeId]?.driverChain;
+        if (chain) {
+          s.programBlocks = [
+            blockFromChain(`pb_${s.id}`, TYPE_BY_ID[s.typeId]?.label ?? "Programme", chain, s.typeId),
+          ];
+        }
       }
       delete s.drivers;
     }
